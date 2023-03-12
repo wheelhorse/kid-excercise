@@ -1,3 +1,3 @@
-python3 /auto/exercise_kid/genMath.py 100
-tar -czf /tmp/exercise_kid.tar.gz /auto/exercise_kid
-echo "Kid Exercise Math" |mail -s "10 Days Kid Math Exercise" -a "From:kidMath@cisco.com" -A "/tmp/exercise_kid.tar.gz" fengbwu@cisco.com ziyma@cisco.com
+#python3 genMath.py -s 10 -e 100 -m -n 5
+python3 genMath.py -s 1 -e 10 -n 5
+echo "Kid Exercise Math" |mail -s "10 Days Kid Math Exercise" -a "From:kidMath@cisco.com" -A "./MathTest.pdf" fengbwu@cisco.com ziyma@cisco.com
