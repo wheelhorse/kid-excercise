@@ -74,17 +74,18 @@ class QdrantManager:
                 except Exception:
                     pass
             
-            # Try to get existing collection
+            # Check existence without exceptions
             try:
-                collection_info = self.client.get_collection(self.collection_name)
-                logger.info(f"Collection {self.collection_name} already exists")
-                return True
-            except UnexpectedResponse as e:
-                # Collection doesn't exist, continue to create it
-                logger.debug(f"Collection {self.collection_name} doesn't exist, will create it")
+                # Check existence (no exceptions thrown)
+                if self.client.collection_exists(self.collection_name):
+                    logger.info(f"Collection {self.collection_name} already exists")
+                    return True
+                else:
+                    logger.info(f"Collection {self.collection_name} does not exist, creating...")
+                    pass
+
             except Exception as e:
-                # Other errors (connection issues, etc.)
-                logger.error(f"Error checking collection existence: {str(e)}")
+                logger.error(f"Failed to check collection {self.collection_name}: {str(e)}")
                 return False
             
             # Get embedding dimensions - use default values if model not fitted yet
@@ -103,9 +104,6 @@ class QdrantManager:
                         size=dense_dim,
                         distance=Distance.COSINE
                     )
-                },
-                sparse_vectors_config={
-                    "sparse": {}  # BM25 sparse vectors - no predefined dimension needed
                 }
             )
             
@@ -421,6 +419,19 @@ class QdrantManager:
         if not self.is_connected:
             return 0
         
+        # Check existence without exceptions
+        try:
+            # Check existence (no exceptions thrown)
+            if self.client.collection_exists(self.collection_name):
+                logger.info(f"Collection {self.collection_name} exists, continue ...")
+                pass
+            else:
+                logger.info(f"Collection {self.collection_name} does not exist, need to create ...")
+                return 0
+        except Exception as e:
+            logger.error(f"Failed to delete candidates: {str(e)}")
+            return 0 
+
         try:
             info = self.client.get_collection(self.collection_name)
             return info.points_count

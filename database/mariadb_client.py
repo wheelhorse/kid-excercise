@@ -49,6 +49,7 @@ class MariaDBClient:
                 password=self.config["password"],
                 database=self.config["database"],
                 charset=self.config["charset"],
+                collation=self.config["collation"],
                 autocommit=True,
                 connect_timeout=10,
                 read_timeout=30
