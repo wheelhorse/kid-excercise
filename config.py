@@ -15,8 +15,8 @@ MARIADB_CONFIG = {
     "user": os.getenv("MARIADB_USER", "root"),
     "password": os.getenv("MARIADB_PASSWORD", ""),
     "database": os.getenv("MARIADB_DATABASE", "cats_dev"),
-    "charset": "utf8mb3",
-    "collation": "utf8mb3_unicode_ci"
+    "charset": "utf8mb4",
+    "collation": "utf8mb4_unicode_ci"
 }
 
 QDRANT_CONFIG = {

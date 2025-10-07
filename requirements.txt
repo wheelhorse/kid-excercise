@@ -4,6 +4,7 @@ sentence-transformers>=2.2.0
 jieba>=0.42.1
 pymysql>=1.0.0
 python-dotenv>=1.0.0
+chardet>=5.2.0
 
 # Text processing
 zhconv>=1.4.0

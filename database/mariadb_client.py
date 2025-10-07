@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from contextlib import contextmanager
+import chardet
 
 from utils.logger import Logger, log_method
 from config import MARIADB_CONFIG
@@ -38,23 +39,74 @@ class MariaDBClient:
         self.last_sync_time = None
         logger.info("MariaDB client initialized")
     
+    def _safe_decode_text(self, text: Any) -> str:
+        """Safely decode text data with encoding error handling"""
+        if text is None:
+            return ""
+        
+        # If it's already a string, return it
+        if isinstance(text, str):
+            return text
+        
+        # If it's bytes, try to decode it safely
+        if isinstance(text, bytes):
+            try:
+                # First try UTF-8
+                return text.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    # Try to detect encoding
+                    detected = chardet.detect(text)
+                    if detected and detected['encoding']:
+                        encoding = detected['encoding']
+                        logger.warning(f"Detected non-UTF-8 encoding: {encoding}")
+                        return text.decode(encoding, errors='replace')
+                except Exception as e:
+                    logger.warning(f"Encoding detection failed: {str(e)}")
+                
+                # Fallback: decode with latin-1 and replace errors
+                try:
+                    return text.decode('latin-1', errors='replace')
+                except Exception as e:
+                    logger.warning(f"Latin-1 decode failed: {str(e)}")
+                    # Ultimate fallback: decode with UTF-8 and replace errors
+                    return text.decode('utf-8', errors='replace')
+        
+        # For any other type, convert to string
+        return str(text)
+    
+    def _sanitize_resume_text(self, text: str) -> str:
+        """Sanitize resume text by removing problematic characters"""
+        if not text:
+            return ""
+        
+        # Remove null bytes and other control characters except newlines and tabs
+        sanitized = ''.join(char for char in text if ord(char) >= 32 or char in '\n\t\r')
+        
+        # Replace multiple whitespace with single space
+        import re
+        sanitized = re.sub(r'\s+', ' ', sanitized)
+        
+        return sanitized.strip()
+    
     @log_method("hybrid_search.mariadb")
     def connect(self) -> bool:
-        """Connect to MariaDB database"""
+        """Connect to MariaDB database with raw data handling"""
         try:
+            # Connect without charset to get raw bytes
             self.connection = pymysql.connect(
                 host=self.config["host"],
                 port=self.config["port"],
                 user=self.config["user"],
                 password=self.config["password"],
                 database=self.config["database"],
-                charset=self.config["charset"],
-                collation=self.config["collation"],
+                charset=None,  # Use binary to get raw bytes
                 autocommit=True,
                 connect_timeout=10,
-                read_timeout=30
+                read_timeout=30,
+                use_unicode=False  # Disable automatic unicode conversion
             )
-            logger.info(f"Connected to MariaDB at {self.config['host']}:{self.config['port']}")
+            logger.info(f"Connected to MariaDB at {self.config['host']}:{self.config['port']} (raw mode)")
             return True
         except Exception as e:
             logger.error(f"Failed to connect to MariaDB: {str(e)}")
@@ -95,6 +147,33 @@ class MariaDBClient:
         finally:
             cursor.close()
     
+    def _safe_fetchall(self, cursor) -> List[Dict[str, Any]]:
+        """Safely fetch all rows, decoding raw bytes to strings"""
+        rows = []
+        
+        # With binary connection, we always get raw bytes, so process each row
+        while True:
+            try:
+                row = cursor.fetchone()
+                if row is None:
+                    break
+                    
+                # Process each field in the row to handle raw bytes
+                safe_row = {}
+                for key, value in row.items():
+                    # Decode the key if it's bytes
+                    safe_key = self._safe_decode_text(key) if isinstance(key, bytes) else key
+                    # Decode the value
+                    safe_row[safe_key] = self._safe_decode_text(value)
+                    
+                rows.append(safe_row)
+                
+            except Exception as row_error:
+                logger.warning(f"Error processing row: {str(row_error)}")
+                continue
+        
+        return rows
+    
     @log_method("hybrid_search.mariadb")
     def get_candidates_with_resumes(self, limit: Optional[int] = None) -> List[CandidateRecord]:
         """Get all candidates with resume attachments"""
@@ -111,32 +190,44 @@ class MariaDBClient:
                     c.notes,
                     c.date_modified,
                     a.attachment_id,
-                    a.text as resume_text
+                    CASE
+                        WHEN a.text IS NOT NULL AND a.text != '' THEN a.text
+                        ELSE NULL
+                    END AS resume_text
                 FROM candidate c
-                LEFT JOIN attachment a ON (a.data_item_id = c.candidate_id AND a.data_item_type = 100)
-                WHERE a.text IS NOT NULL 
-                    AND a.text != ''
-                    AND c.is_active = 1
+                LEFT JOIN attachment a 
+                  ON (a.data_item_id = c.candidate_id AND a.data_item_type = 100)
+                WHERE c.is_active = 1
                 ORDER BY c.date_modified DESC
                 """
                 
                 if limit:
                     query += f" LIMIT {limit}"
                 
-                cursor.execute(query)
-                rows = cursor.fetchall()
+                try:
+                    cursor.execute(query)
+                except Exception as e:
+                    logger.error('execute sql command failed')
+                    logger.error(f"===Error retrieving candidates: {str(e)}")
+                    return []
+
+                rows = self._safe_fetchall(cursor)
                 
                 candidates = []
                 for row in rows:
+                    # Safely decode and sanitize text fields
+                    resume_text = self._safe_decode_text(row['resume_text'])
+                    resume_text = self._sanitize_resume_text(resume_text)
+                    
                     candidate = CandidateRecord(
                         candidate_id=row['candidate_id'],
-                        first_name=row['first_name'] or '',
-                        last_name=row['last_name'] or '',
-                        email1=row['email1'] or '',
-                        key_skills=row['key_skills'] or '',
-                        notes=row['notes'] or '',
+                        first_name=self._safe_decode_text(row['first_name']),
+                        last_name=self._safe_decode_text(row['last_name']),
+                        email1=self._safe_decode_text(row['email1']),
+                        key_skills=self._safe_decode_text(row['key_skills']),
+                        notes=self._safe_decode_text(row['notes']),
                         date_modified=row['date_modified'],
-                        resume_text=row['resume_text'],
+                        resume_text=resume_text,
                         attachment_id=row['attachment_id']
                     )
                     candidates.append(candidate)
@@ -145,7 +236,7 @@ class MariaDBClient:
                 return candidates
                 
         except Exception as e:
-            logger.error(f"Error retrieving candidates: {str(e)}")
+            logger.error(f"===Error retrieving candidates: {str(e)}")
             return []
     
     @log_method("hybrid_search.mariadb")
@@ -177,19 +268,23 @@ class MariaDBClient:
                     query += f" LIMIT {limit}"
                 
                 cursor.execute(query, (timestamp,))
-                rows = cursor.fetchall()
+                rows = self._safe_fetchall(cursor)
                 
                 candidates = []
                 for row in rows:
+                    # Safely decode and sanitize text fields
+                    resume_text = self._safe_decode_text(row['resume_text'])
+                    resume_text = self._sanitize_resume_text(resume_text)
+                    
                     candidate = CandidateRecord(
                         candidate_id=row['candidate_id'],
-                        first_name=row['first_name'] or '',
-                        last_name=row['last_name'] or '',
-                        email1=row['email1'] or '',
-                        key_skills=row['key_skills'] or '',
-                        notes=row['notes'] or '',
+                        first_name=self._safe_decode_text(row['first_name']),
+                        last_name=self._safe_decode_text(row['last_name']),
+                        email1=self._safe_decode_text(row['email1']),
+                        key_skills=self._safe_decode_text(row['key_skills']),
+                        notes=self._safe_decode_text(row['notes']),
                         date_modified=row['date_modified'],
-                        resume_text=row['resume_text'],
+                        resume_text=resume_text,
                         attachment_id=row['attachment_id']
                     )
                     candidates.append(candidate)
@@ -230,15 +325,25 @@ class MariaDBClient:
                 row = cursor.fetchone()
                 
                 if row:
+                    # Process the single row to handle raw bytes
+                    safe_row = {}
+                    for key, value in row.items():
+                        safe_key = self._safe_decode_text(key) if isinstance(key, bytes) else key
+                        safe_row[safe_key] = self._safe_decode_text(value)
+                    row = safe_row
+                    # Safely decode and sanitize text fields
+                    resume_text = self._safe_decode_text(row['resume_text'])
+                    resume_text = self._sanitize_resume_text(resume_text)
+                    
                     candidate = CandidateRecord(
                         candidate_id=row['candidate_id'],
-                        first_name=row['first_name'] or '',
-                        last_name=row['last_name'] or '',
-                        email1=row['email1'] or '',
-                        key_skills=row['key_skills'] or '',
-                        notes=row['notes'] or '',
+                        first_name=self._safe_decode_text(row['first_name']),
+                        last_name=self._safe_decode_text(row['last_name']),
+                        email1=self._safe_decode_text(row['email1']),
+                        key_skills=self._safe_decode_text(row['key_skills']),
+                        notes=self._safe_decode_text(row['notes']),
                         date_modified=row['date_modified'],
-                        resume_text=row['resume_text'],
+                        resume_text=resume_text,
                         attachment_id=row['attachment_id']
                     )
                     logger.info(f"Retrieved candidate {candidate_id}")
@@ -320,6 +425,53 @@ class MariaDBClient:
         except Exception as e:
             logger.error(f"Connection test failed: {str(e)}")
             return False
+    
+    @log_method("hybrid_search.mariadb")
+    def test_text_encoding(self, limit: int = 10) -> Dict[str, Any]:
+        """Test text encoding issues in attachment table"""
+        try:
+            with self.get_cursor() as cursor:
+                # Get a small sample to test encoding
+                query = """
+                SELECT a.attachment_id, a.data_item_id, 
+                       LENGTH(a.text) as text_length,
+                       LEFT(a.text, 100) as text_sample
+                FROM attachment a 
+                WHERE a.text IS NOT NULL AND a.text != ''
+                ORDER BY a.attachment_id 
+                LIMIT %s
+                """
+                
+                cursor.execute(query, (limit,))
+                rows = self._safe_fetchall(cursor)
+                
+                results = {
+                    'total_tested': len(rows),
+                    'encoding_issues': 0,
+                    'successfully_decoded': 0,
+                    'problematic_records': []
+                }
+                
+                for row in rows:
+                    try:
+                        # Try to decode the text
+                        decoded_text = self._safe_decode_text(row['text_sample'])
+                        results['successfully_decoded'] += 1
+                    except Exception as e:
+                        results['encoding_issues'] += 1
+                        results['problematic_records'].append({
+                            'attachment_id': row['attachment_id'],
+                            'data_item_id': row['data_item_id'],
+                            'text_length': row['text_length'],
+                            'error': str(e)
+                        })
+                
+                logger.info(f"Encoding test results: {results}")
+                return results
+                
+        except Exception as e:
+            logger.error(f"Error testing text encoding: {str(e)}")
+            return {'error': str(e)}
     
     def set_last_sync_time(self, timestamp: datetime):
         """Set the last successful sync timestamp"""
