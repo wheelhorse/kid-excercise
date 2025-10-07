@@ -49,6 +49,7 @@ class QdrantManager:
             self.is_connected = True
             
             logger.info(f"Connected to Qdrant at {self.config['url']}")
+            
             return True
             
         except Exception as e:
@@ -70,20 +71,29 @@ class QdrantManager:
                     logger.info(f"Deleted existing collection: {self.collection_name}")
                 except UnexpectedResponse:
                     pass
+                except Exception:
+                    pass
             
             # Try to get existing collection
             try:
                 collection_info = self.client.get_collection(self.collection_name)
                 logger.info(f"Collection {self.collection_name} already exists")
                 return True
-            except UnexpectedResponse:
-                pass
+            except UnexpectedResponse as e:
+                # Collection doesn't exist, continue to create it
+                logger.debug(f"Collection {self.collection_name} doesn't exist, will create it")
+            except Exception as e:
+                # Other errors (connection issues, etc.)
+                logger.error(f"Error checking collection existence: {str(e)}")
+                return False
             
-            # Get embedding dimensions
-            dense_dim = hybrid_model.get_dense_dim()
-            sparse_dim = hybrid_model.get_sparse_dim()
+            # Get embedding dimensions - use default values if model not fitted yet
+            try:
+                dense_dim = hybrid_model.get_dense_dim()
+            except Exception:
+                dense_dim = 1024  # BGE-M3 default dimension
             
-            logger.info(f"Creating collection with dense_dim={dense_dim}, sparse_dim={sparse_dim}")
+            logger.info(f"Creating collection with dense_dim={dense_dim}")
             
             # Create collection with hybrid vectors
             self.client.create_collection(
@@ -95,7 +105,7 @@ class QdrantManager:
                     )
                 },
                 sparse_vectors_config={
-                    "sparse": {}  # BM25 sparse vectors
+                    "sparse": {}  # BM25 sparse vectors - no predefined dimension needed
                 }
             )
             
@@ -118,6 +128,21 @@ class QdrantManager:
             logger.error(f"Failed to get collection info: {str(e)}")
             return None
     
+    @log_method("hybrid_search.qdrant")
+    def collection_exists(self) -> bool:
+        """Check if collection exists"""
+        if not self.is_connected:
+            return False
+        
+        try:
+            self.client.get_collection(self.collection_name)
+            return True
+        except UnexpectedResponse:
+            return False
+        except Exception as e:
+            logger.error(f"Error checking collection existence: {str(e)}")
+            return False
+    
     @log_performance
     def upsert_candidates(self, candidates: List[CandidateRecord]) -> bool:
         """Insert candidate records into Qdrant"""
@@ -128,6 +153,11 @@ class QdrantManager:
         if not candidates:
             logger.warning("No candidates to upsert")
             return True
+        
+        # Check if collection exists before upserting
+        if not self.collection_exists():
+            logger.error(f"Collection {self.collection_name} doesn't exist. Cannot upsert candidates.")
+            return False
         
         logger.info(f"Upserting {len(candidates)} candidates to {self.collection_name}")
         
@@ -394,6 +424,13 @@ class QdrantManager:
         try:
             info = self.client.get_collection(self.collection_name)
             return info.points_count
+        except UnexpectedResponse as e:
+            if "doesn't exist" in str(e):
+                logger.warning(f"Collection {self.collection_name} doesn't exist, returning count 0")
+                return 0
+            else:
+                logger.error(f"Failed to get collection count: {str(e)}")
+                return 0
         except Exception as e:
             logger.error(f"Failed to get collection count: {str(e)}")
             return 0

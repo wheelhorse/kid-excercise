@@ -43,7 +43,8 @@ class SyncManager:
                     logger.error("Failed to connect to Qdrant")
                     return False
                 
-                # Create Qdrant collection if needed
+                # Ensure Qdrant collection exists (create if needed)
+                logger.info("Ensuring Qdrant collection exists...")
                 if not qdrant_manager.create_collection(recreate=force):
                     logger.error("Failed to create Qdrant collection")
                     return False
@@ -60,6 +61,11 @@ class SyncManager:
                 success = qdrant_manager.upsert_candidates(candidates)
                 
                 if success:
+                    # Verify collection exists before trying to get count
+                    if not qdrant_manager.collection_exists():
+                        logger.error("Collection doesn't exist after upsert - sync failed")
+                        return False
+                    
                     # Update last sync time
                     self.last_sync_time = datetime.now()
                     mariadb_client.set_last_sync_time(self.last_sync_time)
