@@ -193,9 +193,9 @@ class QdrantManager:
                     else:
                         date_modified = str(candidate.date_modified)
                 
-                # Create point
+                # Create point - convert integer ID to string to avoid UUID parsing error
                 point = PointStruct(
-                    id=candidate.candidate_id,
+                    id=str(candidate.candidate_id),
                     vector={
                         "dense": dense_embeddings[i].tolist(),
                         "sparse": sparse_vector
@@ -410,9 +410,11 @@ class QdrantManager:
             return False
         
         try:
+            # Convert integer IDs to string IDs to match upsert format
+            string_ids = [str(cid) for cid in candidate_ids]
             self.client.delete(
                 collection_name=self.collection_name,
-                points_selector=candidate_ids
+                points_selector=string_ids
             )
             logger.info(f"Deleted {len(candidate_ids)} candidates from {self.collection_name}")
             return True
