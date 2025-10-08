@@ -27,9 +27,9 @@ QDRANT_CONFIG = {
 }
 
 # Model Settings (CPU optimization is now handled automatically by smart embeddings)
-BGE_M3_MODEL = "BAAI/bge-small-chinese-v1.5"
+BGE_M3_MODEL = "BAAI/bge-small-zh-v1.5"
 COLLECTION_NAME = "resume_hybrid_search"
-SEARCH_MODES = ["hybrid", "bge-small-chinese"]
+SEARCH_MODES = ["hybrid", "bge-small"]
 DEFAULT_TOP_K = 100
 
 # Vector Configuration - Auto-detected based on model
