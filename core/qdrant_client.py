@@ -15,7 +15,7 @@ from qdrant_client.http.exceptions import UnexpectedResponse
 
 from utils.logger import Logger, log_performance, log_method
 from config import QDRANT_CONFIG, COLLECTION_NAME, BATCH_SIZE
-from models.embeddings import hybrid_model
+from models.embeddings_smart import smart_hybrid_model
 from database.mariadb_client import CandidateRecord
 
 logger = Logger.get_logger("hybrid_search.qdrant")
@@ -90,7 +90,7 @@ class QdrantManager:
             
             # Get embedding dimensions - use default values if model not fitted yet
             try:
-                dense_dim = hybrid_model.get_dense_dim()
+                dense_dim = smart_hybrid_model.get_dense_dim()
             except Exception:
                 dense_dim = 1024  # BGE-M3 default dimension
             
@@ -167,11 +167,11 @@ class QdrantManager:
                 texts.append(search_text)
             
             # Get embeddings
-            if not hybrid_model.is_fitted:
-                logger.info("Fitting hybrid model on candidate texts")
-                hybrid_model.fit(texts)
+            if not smart_hybrid_model.is_fitted:
+                logger.info("Fitting smart hybrid model on candidate texts")
+                smart_hybrid_model.fit(texts)
             
-            embeddings = hybrid_model.encode(texts)
+            embeddings = smart_hybrid_model.encode(texts)
             dense_embeddings = embeddings["dense"]
             sparse_embeddings = embeddings["sparse"]
             
@@ -257,7 +257,7 @@ class QdrantManager:
         
         try:
             # Encode query
-            query_embeddings = hybrid_model.encode_query(query)
+            query_embeddings = smart_hybrid_model.encode_query(query)
             dense_query = query_embeddings["dense"]
             sparse_query_data = query_embeddings["sparse"]
             
