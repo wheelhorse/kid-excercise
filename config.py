@@ -55,6 +55,7 @@ LOG_FILE = "hybrid_search.log"
 EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")  # or "cuda"
 ENABLE_CACHING = True
 CACHE_SIZE = 1000  # Default cache size, smart embeddings will optimize internally
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "32"))  # Default batch size for processing
 
 # Search Configuration
 SIMILARITY_THRESHOLD = 0.3
