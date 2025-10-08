@@ -9,7 +9,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     VectorParams, Distance, PointStruct, SparseVector, SparseVectorParams,
     CollectionInfo, SearchRequest, QueryRequest, Filter,
-    FieldCondition, MatchValue, SearchParams
+    FieldCondition, MatchValue, SearchParams, NamedSparseVector
 )
 from qdrant_client.http.exceptions import UnexpectedResponse
 
@@ -227,7 +227,7 @@ class QdrantManager:
                 )
                 logger.debug(f"Upserted batch {i//batch_size + 1}/{(len(points)-1)//batch_size + 1}")
             
-            logger.info(f"Successfully upserted {len(candidates)} candidates")
+            logger.info(f"Successfully upserted {len(candidates)} candidates with {len(points)} Points")
             return True
             
         except Exception as e:
@@ -325,7 +325,10 @@ class QdrantManager:
         try:
             results = self.client.search(
                 collection_name=self.collection_name,
-                query_vector=("sparse", query_vector),
+                query_vector=NamedSparseVector(  # Fixed: Use keyword args
+                    name="sparse",
+                    vector=query_vector
+                ),
                 limit=limit,
                 with_payload=True,
                 with_vectors=False

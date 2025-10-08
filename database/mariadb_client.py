@@ -26,7 +26,6 @@ class CandidateRecord:
     notes: str
     date_modified: datetime
     resume_text: Optional[str] = None
-    attachment_id: Optional[int] = None
 
 
 class MariaDBClient:
@@ -189,16 +188,26 @@ class MariaDBClient:
                     c.key_skills,
                     c.notes,
                     c.date_modified,
-                    a.attachment_id,
-                    CASE
-                        WHEN a.text IS NOT NULL AND a.text != '' THEN a.text
-                        ELSE NULL
-                    END AS resume_text
+                    GROUP_CONCAT(
+                        CASE
+                            WHEN a.text IS NOT NULL AND a.text != '' THEN a.text
+                            ELSE NULL
+                        END
+                        SEPARATOR '\n\n'  -- or any separator you like
+                    ) AS resume_text
                 FROM candidate c
                 LEFT JOIN attachment a 
-                  ON (a.data_item_id = c.candidate_id AND a.data_item_type = 100)
+                    ON a.data_item_id = c.candidate_id AND a.data_item_type = 100
                 WHERE c.is_active = 1
-                ORDER BY c.date_modified DESC
+                GROUP BY 
+                    c.candidate_id,
+                    c.first_name,
+                    c.last_name,
+                    c.email1,
+                    c.key_skills,
+                    c.notes,
+                    c.date_modified
+                ORDER BY c.date_modified DESC;
                 """
                 
                 if limit:
@@ -228,7 +237,6 @@ class MariaDBClient:
                         notes=self._safe_decode_text(row['notes']),
                         date_modified=row['date_modified'],
                         resume_text=resume_text,
-                        attachment_id=row['attachment_id']
                     )
                     candidates.append(candidate)
                 
@@ -253,16 +261,27 @@ class MariaDBClient:
                     c.key_skills,
                     c.notes,
                     c.date_modified,
-                    a.attachment_id,
-                    CASE
-                        WHEN a.text IS NOT NULL AND a.text != '' THEN a.text
-                        ELSE NULL
-                    END AS resume_text
+                    GROUP_CONCAT(
+                        CASE
+                            WHEN a.text IS NOT NULL AND a.text != '' THEN a.text
+                            ELSE NULL
+                        END
+                        SEPARATOR '\n\n'  -- or any separator you like
+                    ) AS resume_text
                 FROM candidate c
-                LEFT JOIN attachment a ON (a.data_item_id = c.candidate_id AND a.data_item_type = 100)
+                LEFT JOIN attachment a 
+                    ON a.data_item_id = c.candidate_id AND a.data_item_type = 100
                 WHERE c.date_modified > %s
                     AND c.is_active = 1
-                ORDER BY c.date_modified DESC
+                GROUP BY 
+                    c.candidate_id,
+                    c.first_name,
+                    c.last_name,
+                    c.email1,
+                    c.key_skills,
+                    c.notes,
+                    c.date_modified
+                ORDER BY c.date_modified DESC;
                 """
                 
                 if limit:
@@ -286,7 +305,6 @@ class MariaDBClient:
                         notes=self._safe_decode_text(row['notes']),
                         date_modified=row['date_modified'],
                         resume_text=resume_text,
-                        attachment_id=row['attachment_id']
                     )
                     candidates.append(candidate)
                 
@@ -311,16 +329,27 @@ class MariaDBClient:
                     c.key_skills,
                     c.notes,
                     c.date_modified,
-                    a.attachment_id,
-                    CASE
-                        WHEN a.text IS NOT NULL AND a.text != '' THEN a.text
-                        ELSE NULL
-                    END AS resume_text
+                    GROUP_CONCAT(
+                        CASE
+                            WHEN a.text IS NOT NULL AND a.text != '' THEN a.text
+                            ELSE NULL
+                        END
+                        SEPARATOR '\n\n'  -- or any separator you like
+                    ) AS resume_text
                 FROM candidate c
-                LEFT JOIN attachment a ON (a.data_item_id = c.candidate_id AND a.data_item_type = 100)
+                LEFT JOIN attachment a 
+                    ON a.data_item_id = c.candidate_id AND a.data_item_type = 100
                 WHERE c.candidate_id = %s
                     AND c.is_active = 1
-                LIMIT 1
+                GROUP BY 
+                    c.candidate_id,
+                    c.first_name,
+                    c.last_name,
+                    c.email1,
+                    c.key_skills,
+                    c.notes,
+                    c.date_modified
+                ORDER BY c.date_modified DESC;
                 """
                 
                 cursor.execute(query, (candidate_id,))
@@ -346,7 +375,6 @@ class MariaDBClient:
                         notes=self._safe_decode_text(row['notes']),
                         date_modified=row['date_modified'],
                         resume_text=resume_text,
-                        attachment_id=row['attachment_id']
                     )
                     logger.info(f"Retrieved candidate {candidate_id}")
                     return candidate
@@ -457,7 +485,6 @@ class MariaDBClient:
                     except Exception as e:
                         results['encoding_issues'] += 1
                         results['problematic_records'].append({
-                            'attachment_id': row['attachment_id'],
                             'data_item_id': row['data_item_id'],
                             'text_length': row['text_length'],
                             'error': str(e)
