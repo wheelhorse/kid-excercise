@@ -45,6 +45,7 @@ ENABLE_TRADITIONAL_CHINESE = True
 SYNC_INTERVAL_SECONDS = 300  # 5 minutes for auto-sync
 MAX_RETRY_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 5
+SYNC_TIMESTAMP_FILE = os.getenv("SYNC_TIMESTAMP_FILE", "last_sync_timestamp.json")
 
 # Logging Configuration
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -76,7 +77,8 @@ SEARCH_CONFIG = {
 SYNC_CONFIG = {
     "interval_seconds": SYNC_INTERVAL_SECONDS,
     "max_retry_attempts": MAX_RETRY_ATTEMPTS,
-    "retry_delay_seconds": RETRY_DELAY_SECONDS
+    "retry_delay_seconds": RETRY_DELAY_SECONDS,
+    "timestamp_file": SYNC_TIMESTAMP_FILE
 }
 
 def validate_config() -> bool:
@@ -123,5 +125,6 @@ def get_sync_config() -> Dict[str, Any]:
     return {
         "interval_seconds": SYNC_INTERVAL_SECONDS,
         "max_retry_attempts": MAX_RETRY_ATTEMPTS,
-        "retry_delay_seconds": RETRY_DELAY_SECONDS
+        "retry_delay_seconds": RETRY_DELAY_SECONDS,
+        "timestamp_file": SYNC_TIMESTAMP_FILE
     }

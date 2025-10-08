@@ -2,6 +2,8 @@
 Data synchronization manager between MariaDB and Qdrant
 """
 import time
+import os
+import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Set
 from threading import Lock
@@ -25,7 +27,18 @@ class SyncManager:
         self.sync_lock = Lock()
         self.is_running = False
         
-        logger.info("Sync manager initialized")
+        # Get configurable timestamp file path
+        timestamp_filename = self.sync_config.get('timestamp_file', 'last_sync_timestamp.json')
+        # If it's just a filename, place it in the project root directory
+        if not os.path.isabs(timestamp_filename):
+            self.sync_timestamp_file = os.path.join(os.path.dirname(__file__), '..', timestamp_filename)
+        else:
+            self.sync_timestamp_file = timestamp_filename
+        
+        # Load last sync time from file on startup
+        self.last_sync_time = self._load_sync_timestamp()
+        
+        logger.info(f"Sync manager initialized. Timestamp file: {self.sync_timestamp_file}, Last sync time: {self.last_sync_time}")
     
     @log_performance
     def initial_sync(self, force: bool = False) -> bool:
@@ -69,6 +82,7 @@ class SyncManager:
                     # Update last sync time
                     self.last_sync_time = datetime.now()
                     mariadb_client.set_last_sync_time(self.last_sync_time)
+                    self._save_sync_timestamp(self.last_sync_time)
                     
                     # Verify sync
                     qdrant_count = qdrant_manager.get_collection_count()
@@ -125,6 +139,7 @@ class SyncManager:
                     # Update last sync time
                     self.last_sync_time = datetime.now()
                     mariadb_client.set_last_sync_time(self.last_sync_time)
+                    self._save_sync_timestamp(self.last_sync_time)
                     
                     logger.info(f"Incremental sync completed - {len(modified_candidates)} candidates updated")
                     return True
@@ -145,8 +160,48 @@ class SyncManager:
         if self.last_sync_time:
             return self.last_sync_time
         
-        # Try to get from MariaDB client
+        # Try to load from file
+        self.last_sync_time = self._load_sync_timestamp()
+        if self.last_sync_time:
+            return self.last_sync_time
+        
+        # Try to get from MariaDB client as fallback
         return mariadb_client.get_last_sync_time()
+    
+    def _load_sync_timestamp(self) -> Optional[datetime]:
+        """Load last sync timestamp from file"""
+        try:
+            if os.path.exists(self.sync_timestamp_file):
+                with open(self.sync_timestamp_file, 'r') as f:
+                    data = json.load(f)
+                    timestamp_str = data.get('last_sync_time')
+                    if timestamp_str:
+                        timestamp = datetime.fromisoformat(timestamp_str)
+                        logger.info(f"Loaded last sync timestamp from file: {timestamp}")
+                        return timestamp
+        except Exception as e:
+            logger.warning(f"Failed to load sync timestamp from file: {str(e)}")
+        
+        return None
+    
+    def _save_sync_timestamp(self, timestamp: datetime):
+        """Save last sync timestamp to file"""
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(self.sync_timestamp_file), exist_ok=True)
+            
+            data = {
+                'last_sync_time': timestamp.isoformat(),
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            with open(self.sync_timestamp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            
+            logger.info(f"Saved sync timestamp to file: {timestamp}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save sync timestamp to file: {str(e)}")
     
     @log_method("hybrid_search.sync")
     def get_sync_status(self) -> Dict[str, Any]:

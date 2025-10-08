@@ -254,12 +254,13 @@ class MariaDBClient:
                     c.notes,
                     c.date_modified,
                     a.attachment_id,
-                    a.text as resume_text
+                    CASE
+                        WHEN a.text IS NOT NULL AND a.text != '' THEN a.text
+                        ELSE NULL
+                    END AS resume_text
                 FROM candidate c
                 LEFT JOIN attachment a ON (a.data_item_id = c.candidate_id AND a.data_item_type = 100)
                 WHERE c.date_modified > %s
-                    AND a.text IS NOT NULL 
-                    AND a.text != ''
                     AND c.is_active = 1
                 ORDER BY c.date_modified DESC
                 """
@@ -311,12 +312,13 @@ class MariaDBClient:
                     c.notes,
                     c.date_modified,
                     a.attachment_id,
-                    a.text as resume_text
+                    CASE
+                        WHEN a.text IS NOT NULL AND a.text != '' THEN a.text
+                        ELSE NULL
+                    END AS resume_text
                 FROM candidate c
                 LEFT JOIN attachment a ON (a.data_item_id = c.candidate_id AND a.data_item_type = 100)
                 WHERE c.candidate_id = %s
-                    AND a.text IS NOT NULL 
-                    AND a.text != ''
                     AND c.is_active = 1
                 LIMIT 1
                 """
@@ -358,16 +360,13 @@ class MariaDBClient:
     
     @log_method("hybrid_search.mariadb")
     def get_total_candidates_count(self) -> int:
-        """Get total number of candidates with resumes"""
+        """Get total number of active candidates"""
         try:
             with self.get_cursor() as cursor:
                 query = """
-                SELECT COUNT(DISTINCT c.candidate_id) as count
+                SELECT COUNT(c.candidate_id) as count
                 FROM candidate c
-                LEFT JOIN attachment a ON (a.data_item_id = c.candidate_id AND a.data_item_type = 100)
-                WHERE a.text IS NOT NULL 
-                    AND a.text != ''
-                    AND c.is_active = 1
+                WHERE c.is_active = 1
                 """
                 
                 cursor.execute(query)
@@ -390,9 +389,7 @@ class MariaDBClient:
                 SELECT MAX(c.date_modified) as latest_modified
                 FROM candidate c
                 LEFT JOIN attachment a ON (a.data_item_id = c.candidate_id AND a.data_item_type = 100)
-                WHERE a.text IS NOT NULL 
-                    AND a.text != ''
-                    AND c.is_active = 1
+                WHERE c.is_active = 1
                 """
                 
                 cursor.execute(query)
