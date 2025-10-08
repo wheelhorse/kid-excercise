@@ -152,7 +152,7 @@ class SearchService:
                         "email": mariadb_details.email1,
                         "key_skills": mariadb_details.key_skills,
                         "notes": mariadb_details.notes,
-                        "date_modified": mariadb_details.date_modified.isoformat() if mariadb_details.date_modified else None,
+                        "date_modified": mariadb_details.date_modified.isoformat() if mariadb_details.date_modified and isinstance(mariadb_details.date_modified, datetime) else str(mariadb_details.date_modified) if mariadb_details.date_modified else None,
                         "resume_available": bool(mariadb_details.resume_text)
                     })
                 else:
@@ -238,7 +238,7 @@ class SearchService:
                 "email": candidate.email1,
                 "key_skills": candidate.key_skills,
                 "notes": candidate.notes,
-                "date_modified": candidate.date_modified.isoformat() if candidate.date_modified else None,
+                "date_modified": candidate.date_modified.isoformat() if candidate.date_modified and isinstance(candidate.date_modified, datetime) else str(candidate.date_modified) if candidate.date_modified else None,
                 "resume_text": candidate.resume_text,
                 "attachment_id": candidate.attachment_id
             }

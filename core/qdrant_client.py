@@ -185,6 +185,14 @@ class QdrantManager:
                     values=sparse_data["values"]
                 )
                 
+                # Safely format date_modified
+                date_modified = None
+                if candidate.date_modified:
+                    if isinstance(candidate.date_modified, datetime):
+                        date_modified = candidate.date_modified.isoformat()
+                    else:
+                        date_modified = str(candidate.date_modified)
+                
                 # Create point
                 point = PointStruct(
                     id=candidate.candidate_id,
@@ -199,7 +207,7 @@ class QdrantManager:
                         "email1": candidate.email1,
                         "key_skills": candidate.key_skills,
                         "notes": candidate.notes,
-                        "date_modified": candidate.date_modified.isoformat(),
+                        "date_modified": date_modified,
                         "search_text": texts[i][:500],  # Truncated for payload
                     }
                 )
