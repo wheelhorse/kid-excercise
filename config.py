@@ -27,13 +27,13 @@ QDRANT_CONFIG = {
 }
 
 # Model Settings (CPU optimization is now handled automatically by smart embeddings)
-BGE_M3_MODEL = "BAAI/bge-m3"
+BGE_M3_MODEL = "BAAI/bge-small-chinese-v1.5"
 COLLECTION_NAME = "resume_hybrid_search"
-SEARCH_MODES = ["bge-m3", "hybrid"]
+SEARCH_MODES = ["hybrid", "bge-small-chinese"]
 DEFAULT_TOP_K = 100
 
-# Vector Configuration
-DENSE_VECTOR_SIZE = 1024  # BGE-M3 embedding dimension
+# Vector Configuration - Auto-detected based on model
+# DENSE_VECTOR_SIZE is now automatically determined by the embedding model
 DISTANCE_METRIC = "Cosine"
 
 # Text Processing
@@ -103,7 +103,6 @@ def get_model_config() -> Dict[str, Any]:
     """Get model configuration (CPU optimization handled by smart embeddings)"""
     return {
         "bge_m3_model": BGE_M3_MODEL,
-        "dense_vector_size": DENSE_VECTOR_SIZE,
         "device": EMBEDDING_DEVICE,
         "max_text_length": MAX_TEXT_LENGTH
     }
