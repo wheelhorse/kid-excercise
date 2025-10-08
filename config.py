@@ -26,12 +26,11 @@ QDRANT_CONFIG = {
     "prefer_grpc": True
 }
 
-# Model Settings
+# Model Settings (CPU optimization is now handled automatically by smart embeddings)
 BGE_M3_MODEL = "BAAI/bge-m3"
 COLLECTION_NAME = "resume_hybrid_search"
 SEARCH_MODES = ["bge-m3", "hybrid"]
 DEFAULT_TOP_K = 100
-BATCH_SIZE = 32
 
 # Vector Configuration
 DENSE_VECTOR_SIZE = 1024  # BGE-M3 embedding dimension
@@ -42,8 +41,7 @@ MAX_TEXT_LENGTH = 8192  # Maximum text length for embedding
 CHINESE_TOKENIZER = "jieba"
 ENABLE_TRADITIONAL_CHINESE = True
 
-# Sync Configuration
-SYNC_BATCH_SIZE = 100
+# Sync Configuration (uses smart CPU detection internally)
 SYNC_INTERVAL_SECONDS = 300  # 5 minutes for auto-sync
 MAX_RETRY_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 5
@@ -53,10 +51,10 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 LOG_FILE = "hybrid_search.log"
 
-# Performance Settings
+# Performance Settings (optimization now handled by smart embeddings)
 EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")  # or "cuda"
 ENABLE_CACHING = True
-CACHE_SIZE = 1000
+CACHE_SIZE = 1000  # Default cache size, smart embeddings will optimize internally
 
 # Search Configuration
 SIMILARITY_THRESHOLD = 0.3
@@ -75,7 +73,6 @@ SEARCH_CONFIG = {
 }
 
 SYNC_CONFIG = {
-    "batch_size": SYNC_BATCH_SIZE,
     "interval_seconds": SYNC_INTERVAL_SECONDS,
     "max_retry_attempts": MAX_RETRY_ATTEMPTS,
     "retry_delay_seconds": RETRY_DELAY_SECONDS
@@ -102,7 +99,7 @@ def validate_config() -> bool:
     return True
 
 def get_model_config() -> Dict[str, Any]:
-    """Get model configuration"""
+    """Get model configuration (CPU optimization handled by smart embeddings)"""
     return {
         "bge_m3_model": BGE_M3_MODEL,
         "dense_vector_size": DENSE_VECTOR_SIZE,
@@ -122,9 +119,8 @@ def get_search_config() -> Dict[str, Any]:
     }
 
 def get_sync_config() -> Dict[str, Any]:
-    """Get synchronization configuration"""
+    """Get synchronization configuration (CPU optimization handled by smart embeddings)"""
     return {
-        "batch_size": SYNC_BATCH_SIZE,
         "interval_seconds": SYNC_INTERVAL_SECONDS,
         "max_retry_attempts": MAX_RETRY_ATTEMPTS,
         "retry_delay_seconds": RETRY_DELAY_SECONDS

@@ -1,24 +1,113 @@
-# Core dependencies
-qdrant-client>=1.6.0
-sentence-transformers>=2.2.0
-jieba>=0.42.1
-pymysql>=1.0.0
-python-dotenv>=1.0.0
-chardet>=5.2.0
+# Resume Retrieval System - Dependencies
+# Technology: Qdrant + BAAI/bge-m3 + jieba/BM25 + Hybrid Search
 
-# Text processing
+# =====================================================
+# CORE DEPENDENCIES - Essential for basic functionality
+# =====================================================
+
+# Vector Database
+qdrant-client>=1.6.0
+
+# Text Embeddings & NLP
+sentence-transformers>=2.2.0
+transformers>=4.30.0
+
+# Chinese Text Processing
+jieba>=0.42.1
 zhconv>=1.4.0
 opencc-python-reimplemented>=0.1.7
 
-# Performance and utilities
+# Database Connectivity
+pymysql>=1.0.0
+
+# Configuration & Environment
+python-dotenv>=1.0.0
+
+# Text Encoding Detection
+chardet>=5.2.0
+
+# =====================================================
+# SCIENTIFIC COMPUTING & PERFORMANCE
+# =====================================================
+
+# Core Scientific Libraries
 numpy>=1.24.0
+scipy>=1.10.0
 pandas>=2.0.0
+scikit-learn>=1.3.0
+
+# Machine Learning Backend
+torch>=2.0.0
+
+# =====================================================
+# CPU OPTIMIZATION LIBRARIES
+# =====================================================
+
+# System & Hardware Detection
+psutil>=5.9.0
+py-cpuinfo>=9.0.0
+
+# ONNX Runtime (Cross-platform optimization)
+onnxruntime>=1.16.0
+onnx>=1.14.0
+optimum[onnxruntime]>=1.13.0
+
+# Intel CPU Optimizations (safe on all systems)
+intel-extension-for-pytorch>=2.0.0
+mkl>=2023.0.0
+intel-openmp>=2023.0.0
+
+# Cross-platform Numerical Optimizations
+numba>=0.58.0
+cython>=3.0.0
+
+# =====================================================
+# PERFORMANCE & UTILITIES
+# =====================================================
+
+# Progress Bars & CLI
 tqdm>=4.65.0
 click>=8.1.0
+
+# Task Scheduling
 schedule>=1.2.0
 
-# Development and testing
+# Threading Control
+threadpoolctl>=3.1.0
+multiprocessing-logging>=0.3.0
+
+# =====================================================
+# DEVELOPMENT & TESTING
+# =====================================================
+
+# Testing Framework
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
+
+# Code Quality
 black>=23.0.0
 mypy>=1.5.0
+
+# =====================================================
+# NOTES ON OPTIMIZATION PACKAGES
+# =====================================================
+
+# AMD-specific notes:
+# - ONNX Runtime provides excellent AMD CPU performance
+# - Intel packages are still beneficial on AMD (MKL libraries)
+# - For AMD GPUs, ROCm packages need separate installation
+
+# Intel-specific notes:
+# - Intel Extension for PyTorch provides significant speedups
+# - MKL (Math Kernel Library) optimizes mathematical operations
+# - OpenVINO can be added separately for additional Intel optimizations
+
+# Optional packages (install manually if needed):
+# - openvino>=2023.0.0  # Intel OpenVINO (Intel CPUs only)
+# - fasttext>=0.9.2     # Fast text processing
+# - openblas>=0.3.20    # Alternative BLAS implementation (conda install)
+
+# For production deployments, consider:
+# - Memory profiling: memory-profiler
+# - Performance monitoring: line-profiler
+# - Advanced logging: structlog
