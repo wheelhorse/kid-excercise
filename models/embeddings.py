@@ -66,7 +66,7 @@ class BGEEmbedding:
     def get_embedding_dim(self) -> int:
         """Get embedding dimension"""
         if self.model is None:
-            return 1024  # BGE-M3 default
+            return 512  # BGE-M3 default
         return self.model.get_sentence_embedding_dimension()
 
 

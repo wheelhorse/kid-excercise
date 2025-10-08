@@ -7,7 +7,7 @@ import numpy as np
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
-    VectorParams, Distance, PointStruct, SparseVector,
+    VectorParams, Distance, PointStruct, SparseVector, SparseVectorParams,
     CollectionInfo, SearchRequest, QueryRequest, Filter,
     FieldCondition, MatchValue, SearchParams
 )
@@ -92,7 +92,7 @@ class QdrantManager:
             try:
                 dense_dim = smart_hybrid_model.get_dense_dim()
             except Exception:
-                dense_dim = 1024  # BGE-M3 default dimension
+                dense_dim = 512  # BGE-M3 default dimension
             
             logger.info(f"Creating collection with dense_dim={dense_dim}")
             
@@ -104,6 +104,9 @@ class QdrantManager:
                         size=dense_dim,
                         distance=Distance.COSINE
                     )
+                },
+                sparse_vectors_config={
+                    "sparse": SparseVectorParams()
                 }
             )
             
@@ -158,7 +161,7 @@ class QdrantManager:
             return False
         
         logger.info(f"Upserting {len(candidates)} candidates to {self.collection_name}")
-        
+
         try:
             # Prepare texts for embedding
             texts = []
@@ -195,7 +198,7 @@ class QdrantManager:
                 
                 # Create point - convert integer ID to string to avoid UUID parsing error
                 point = PointStruct(
-                    id=str(candidate.candidate_id),
+                    id=id(str(candidate.candidate_id)),
                     vector={
                         "dense": dense_embeddings[i].tolist(),
                         "sparse": sparse_vector
