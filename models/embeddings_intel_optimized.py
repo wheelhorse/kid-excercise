@@ -30,6 +30,7 @@ except ImportError:
 from utils.logger import Logger, log_performance
 from utils.text_processor import text_processor
 from config import BGE_M3_MODEL, EMBEDDING_DEVICE, MAX_TEXT_LENGTH
+from .text_preprocessing import preprocess_texts_consistent, preprocess_single_text
 
 logger = Logger.get_logger("hybrid_search.embeddings_intel_optimized")
 
@@ -226,8 +227,8 @@ class IntelOptimizedBGEEmbedding:
             # Intel CPUs benefit from more workers due to hyperthreading
             num_workers = min(self.optimal_threads, len(texts) // 3 + 1) if self.is_intel_cpu else min(self.optimal_threads, len(texts) // 5 + 1)
         
-        # Preprocess texts in parallel with Intel optimizations
-        processed_texts = self._preprocess_texts_parallel(texts)
+        # Preprocess texts using common function
+        processed_texts = preprocess_texts_consistent(texts, use_multiprocessing=True)
         
         try:
             # Use Intel-optimized PyTorch/IPEX for all dataset sizes
@@ -241,29 +242,6 @@ class IntelOptimizedBGEEmbedding:
             logger.error(f"Failed to encode texts: {str(e)}")
             raise
     
-    def _preprocess_texts_parallel(self, texts: List[str]) -> List[str]:
-        """Parallel text preprocessing optimized for Intel CPUs"""
-        def process_single_text(text: str) -> str:
-            if len(text) > MAX_TEXT_LENGTH:
-                text = text[:MAX_TEXT_LENGTH]
-            return text_processor.clean_text(text)
-        
-        # Use Intel-optimized parallel processing
-        if len(texts) > 50:
-            # Intel CPUs benefit from more aggressive parallelization
-            max_workers = min(12, self.optimal_threads) if self.is_intel_cpu else min(8, self.optimal_threads)
-            chunk_size = max(len(texts) // (self.optimal_threads * 2), 5)
-            
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                processed_texts = list(executor.map(
-                    process_single_text, 
-                    texts, 
-                    chunksize=chunk_size
-                ))
-        else:
-            processed_texts = [process_single_text(text) for text in texts]
-        
-        return processed_texts
     
     
     def _encode_ipex(self, texts: List[str], batch_size: int) -> np.ndarray:
@@ -377,14 +355,15 @@ class IntelOptimizedHybridEmbedding:
         if isinstance(texts, str):
             texts = [texts]
         
-        # Get Intel-optimized dense embeddings
-        dense_embeddings = self.bge_model.encode(
-            texts, 
-            batch_size=batch_size
-        )
+        # Apply consistent text preprocessing for both dense and sparse
+        processed_texts = preprocess_texts_consistent(texts, use_multiprocessing=True)
         
-        # Get optimized sparse embeddings
-        sparse_embeddings = self.bm25_model.encode(texts, use_parallel=use_parallel)
+        # Get Intel-optimized dense embeddings
+        dense_embeddings = self.bge_model._encode_best_available(processed_texts, 
+                                                                batch_size or self.bge_model.optimal_batch_size)
+        
+        # Get optimized sparse embeddings with same preprocessing
+        sparse_embeddings = self.bm25_model.encode(processed_texts, use_parallel=use_parallel)
         
         return {
             "dense": dense_embeddings,
@@ -393,22 +372,28 @@ class IntelOptimizedHybridEmbedding:
     
     def encode_query(self, query: str) -> Dict[str, Any]:
         """Intel-optimized query encoding"""
+        # Apply consistent preprocessing
+        processed_query = preprocess_single_text(query)
+        
         # Dense embedding
-        dense_embedding = self.bge_model.encode([query])[0]
+        dense_embedding = self.bge_model._encode_best_available([processed_query], 
+                                                               self.bge_model.optimal_batch_size)[0]
         
         # Sparse embedding
-        sparse_embedding = self.bm25_model.encode_query(query)
+        sparse_embedding = self.bm25_model.encode_query(processed_query)
         
         return {
             "dense": dense_embedding,
             "sparse": sparse_embedding
         }
     
+    
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get comprehensive Intel performance statistics"""
         return {
             "bge_stats": self.bge_model.get_performance_stats(),
             "bm25_workers": self.bm25_model.optimal_workers,
+            "preprocessing_consistency": "Applied unified preprocessing for both dense and sparse",
             "intel_optimization_active": self.bge_model.is_intel_cpu
         }
 

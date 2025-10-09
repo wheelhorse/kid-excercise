@@ -20,6 +20,7 @@ os.environ.setdefault('TOKENIZERS_PARALLELISM', 'false')
 from utils.logger import Logger, log_performance
 from utils.text_processor import text_processor
 from config import BGE_M3_MODEL, EMBEDDING_DEVICE, MAX_TEXT_LENGTH
+from .text_preprocessing import preprocess_texts_consistent, preprocess_single_text
 
 logger = Logger.get_logger("hybrid_search.embeddings_amd_optimized")
 
@@ -142,8 +143,8 @@ class AMDOptimizedBGEEmbedding:
         if num_workers is None:
             num_workers = min(self.optimal_threads, len(texts) // 4 + 1)
         
-        # AMD-optimized text preprocessing
-        processed_texts = self._preprocess_texts_amd(texts)
+        # Use common text preprocessing
+        processed_texts = preprocess_texts_consistent(texts, use_multiprocessing=True)
         
         try:
             # Use AMD-optimized PyTorch
@@ -157,23 +158,6 @@ class AMDOptimizedBGEEmbedding:
             logger.error(f"AMD encoding failed: {str(e)}")
             raise
     
-    def _preprocess_texts_amd(self, texts: List[str]) -> List[str]:
-        """AMD-optimized text preprocessing"""
-        def process_single_text(text: str) -> str:
-            if len(text) > MAX_TEXT_LENGTH:
-                text = text[:MAX_TEXT_LENGTH]
-            return text_processor.clean_text(text)
-        
-        # AMD 5700G benefits from moderate parallelism for preprocessing
-        if len(texts) > 100:
-            # Use thread pool optimized for AMD cores
-            max_workers = min(self.physical_cores, len(texts) // 10)
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                processed_texts = list(executor.map(process_single_text, texts))
-        else:
-            processed_texts = [process_single_text(text) for text in texts]
-        
-        return processed_texts
     
     def _encode_pytorch_amd(self, texts: List[str], batch_size: int) -> np.ndarray:
         """PyTorch encoding optimized for AMD CPUs"""
@@ -251,14 +235,15 @@ class AMDOptimizedHybridEmbedding:
         if isinstance(texts, str):
             texts = [texts]
         
-        # Get AMD-optimized dense embeddings
-        dense_embeddings = self.bge_model.encode(
-            texts, 
-            batch_size=batch_size
-        )
+        # Apply consistent text preprocessing for both dense and sparse
+        processed_texts = preprocess_texts_consistent(texts, use_multiprocessing=True)
         
-        # Get optimized sparse embeddings
-        sparse_embeddings = self.bm25_model.encode(texts, use_parallel=use_parallel)
+        # Get AMD-optimized dense embeddings
+        dense_embeddings = self.bge_model._encode_pytorch_amd(processed_texts, 
+                                                             batch_size or self.bge_model.optimal_batch_size)
+        
+        # Get optimized sparse embeddings with same preprocessing
+        sparse_embeddings = self.bm25_model.encode(processed_texts, use_parallel=use_parallel)
         
         return {
             "dense": dense_embeddings,
@@ -267,22 +252,28 @@ class AMDOptimizedHybridEmbedding:
     
     def encode_query(self, query: str) -> Dict[str, Any]:
         """AMD-optimized query encoding"""
-        # Dense embedding
-        dense_embedding = self.bge_model.encode([query])[0]
+        # Apply consistent preprocessing
+        processed_query = preprocess_single_text(query)
         
-        # Sparse embedding
-        sparse_embedding = self.bm25_model.encode_query(query)
+        # Dense embedding
+        dense_embedding = self.bge_model._encode_pytorch_amd([processed_query], 
+                                                           self.bge_model.optimal_batch_size)[0]
+        
+        # Sparse embedding  
+        sparse_embedding = self.bm25_model.encode_query(processed_query)
         
         return {
             "dense": dense_embedding,
             "sparse": sparse_embedding
         }
     
+    
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get comprehensive AMD performance statistics"""
         return {
             "bge_stats": self.bge_model.get_amd_performance_stats(),
             "bm25_workers": self.bm25_model.optimal_workers,
+            "preprocessing_consistency": "Applied unified preprocessing for both dense and sparse",
             "amd_optimization_summary": {
                 "cpu_detected": "AMD (optimized)",
                 "recommended_libraries": [

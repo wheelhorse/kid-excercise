@@ -10,6 +10,7 @@ import math
 from utils.logger import Logger, log_performance
 from utils.text_processor import text_processor
 from config import BGE_M3_MODEL, EMBEDDING_DEVICE, MAX_TEXT_LENGTH
+from .text_preprocessing import preprocess_texts_consistent, preprocess_single_text
 
 logger = Logger.get_logger("hybrid_search.embeddings")
 
@@ -40,12 +41,8 @@ class BGEEmbedding:
         if isinstance(texts, str):
             texts = [texts]
         
-        # Truncate texts to max length
-        processed_texts = []
-        for text in texts:
-            if len(text) > MAX_TEXT_LENGTH:
-                text = text[:MAX_TEXT_LENGTH]
-            processed_texts.append(text_processor.clean_text(text))
+        # Use common preprocessing
+        processed_texts = preprocess_texts_consistent(texts, use_multiprocessing=False)
         
         try:
             embeddings = self.model.encode(
@@ -61,6 +58,24 @@ class BGEEmbedding:
             
         except Exception as e:
             logger.error(f"Failed to encode texts: {str(e)}")
+            raise
+    
+    def _encode_preprocessed(self, processed_texts: List[str], batch_size: int = 32) -> np.ndarray:
+        """Encode already preprocessed texts to dense vectors"""
+        try:
+            embeddings = self.model.encode(
+                processed_texts,
+                batch_size=batch_size,
+                show_progress_bar=len(processed_texts) > 10,
+                convert_to_numpy=True,
+                normalize_embeddings=True  # Normalize for cosine similarity
+            )
+            
+            logger.debug(f"Encoded {len(processed_texts)} preprocessed texts to {embeddings.shape}")
+            return embeddings
+            
+        except Exception as e:
+            logger.error(f"Failed to encode preprocessed texts: {str(e)}")
             raise
     
     def get_embedding_dim(self) -> int:
@@ -206,11 +221,14 @@ class HybridEmbedding:
         if isinstance(texts, str):
             texts = [texts]
         
-        # Get dense embeddings
-        dense_embeddings = self.bge_model.encode(texts)
+        # Apply consistent text preprocessing for both dense and sparse
+        processed_texts = preprocess_texts_consistent(texts, use_multiprocessing=False)
         
-        # Get sparse embeddings
-        sparse_embeddings = self.bm25_model.encode(texts)
+        # Get dense embeddings using preprocessed texts
+        dense_embeddings = self.bge_model._encode_preprocessed(processed_texts)
+        
+        # Get sparse embeddings using same preprocessed texts
+        sparse_embeddings = self.bm25_model.encode(processed_texts)
         
         return {
             "dense": dense_embeddings,
@@ -219,11 +237,14 @@ class HybridEmbedding:
     
     def encode_query(self, query: str) -> Dict[str, Any]:
         """Encode query for hybrid search"""
+        # Apply consistent preprocessing
+        processed_query = preprocess_single_text(query)
+        
         # Dense embedding
-        dense_embedding = self.bge_model.encode([query])[0]
+        dense_embedding = self.bge_model._encode_preprocessed([processed_query])[0]
         
         # Sparse embedding
-        sparse_embedding = self.bm25_model.encode_query(query)
+        sparse_embedding = self.bm25_model.encode_query(processed_query)
         
         return {
             "dense": dense_embedding,
@@ -233,6 +254,7 @@ class HybridEmbedding:
     def get_dense_dim(self) -> int:
         """Get dense embedding dimension"""
         return self.bge_model.get_embedding_dim()
+    
     
     def get_sparse_dim(self) -> int:
         """Get sparse embedding dimension (vocabulary size)"""
