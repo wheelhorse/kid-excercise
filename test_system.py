@@ -1,43 +1,33 @@
-#!/usr/bin/env python3
-"""
-Quick test script for Resume Retrieval System
-"""
-import sys
-import os
+from qdrant_client import QdrantClient
 
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(__file__))
+client = QdrantClient(
+    url="http://back.com:6333",
+    api_key="ysanta-hrms-qdrant"
+)
 
-from main import TerminalInterface
+qdrant_ids = set()
+offset = 0
+limit = 1000
 
-def quick_test():
-    """Run a quick test of the system"""
-    print("=" * 60)
-    print("Quick Test - Resume Retrieval System")
-    print("=" * 60)
-    
-    interface = TerminalInterface()
-    
-    # Test system status
-    print("\n1. Testing System Status...")
-    interface.show_system_status()
-    
-    # Test initialization (without force)
-    print("\n2. Testing System Initialization...")
-    interface.initialize_system(force=False)
-    
-    # Test sync status
-    print("\n3. Testing Sync Status...")
-    interface.show_sync_status()
-    
-    # Test search examples
-    print("\n4. Testing Search Examples...")
-    interface.test_search_examples()
-    
-    print("\n" + "=" * 60)
-    print("Quick test completed!")
-    print("Run 'python3 main.py' for interactive mode")
-    print("=" * 60)
+scroll_generator = client.scroll(
+    collection_name="resume_hybrid_search",
+    offset=offset,
+    limit=limit,
+    with_vectors=False,
+    with_payload=False
+)
 
-if __name__ == "__main__":
-    quick_test()
+for points_batch in scroll_generator:
+    # points_batch might be an int (total count) or a list of PointStruct
+    if isinstance(points_batch, list):
+        for point in points_batch:
+            qdrant_ids.add(point.id)
+        offset += len(points_batch)
+        print("Scroll returned non-list:", offset)
+    else:
+        pass
+        # sometimes scroll returns just the total number of points as int
+        #print("Scroll returned non-list:", points_batch)
+    
+print(f"Total unique points in Qdrant: {len(qdrant_ids)}")
+

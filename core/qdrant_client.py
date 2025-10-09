@@ -238,10 +238,8 @@ class QdrantManager:
         """Create searchable text from candidate record"""
         parts = []
         
-        if candidate.first_name:
-            parts.append(candidate.first_name)
         if candidate.last_name:
-            parts.append(candidate.last_name)
+            parts.append(candidate.last_name+candidate.first_name)
         if candidate.key_skills:
             parts.append(candidate.key_skills)
         if candidate.notes:
