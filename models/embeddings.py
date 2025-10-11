@@ -1,7 +1,11 @@
 """
-Embedding models for BGE-M3 dense embeddings and BM25 sparse embeddings
+Embedding models for BGE-M3 dense embeddings and BM25 sparse embeddings with caching support
 """
 import numpy as np
+import os
+import pickle
+import tempfile
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from sentence_transformers import SentenceTransformer
 from collections import Counter
@@ -11,18 +15,24 @@ from utils.logger import Logger, log_performance
 from utils.text_processor import text_processor
 from config import BGE_M3_MODEL, EMBEDDING_DEVICE, MAX_TEXT_LENGTH
 from .text_preprocessing import preprocess_texts_consistent, preprocess_single_text
+from .embeddings_optimized import OptimizedBM25Embedding
 
 logger = Logger.get_logger("hybrid_search.embeddings")
 
 
 class BGEEmbedding:
-    """BGE-M3 dense embedding model"""
+    """BGE-M3 dense embedding model with caching support"""
     
-    def __init__(self, model_name: str = BGE_M3_MODEL, device: str = EMBEDDING_DEVICE):
-        """Initialize BGE-M3 model"""
+    def __init__(self, model_name: str = BGE_M3_MODEL, device: str = EMBEDDING_DEVICE, cache_dir: str = "./model_cache"):
+        """Initialize BGE-M3 model with caching"""
         self.model_name = model_name
         self.device = device
+        self.cache_dir = Path(cache_dir)
         self.model = None
+        
+        # Ensure cache directory exists
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        
         self._load_model()
     
     def _load_model(self):
@@ -85,110 +95,8 @@ class BGEEmbedding:
         return self.model.get_sentence_embedding_dimension()
 
 
-class BM25Embedding:
-    """BM25 sparse embedding using jieba tokenization"""
-    
-    def __init__(self, k1: float = 1.2, b: float = 0.75):
-        """Initialize BM25 parameters"""
-        self.k1 = k1
-        self.b = b
-        self.corpus_tokens = []
-        self.doc_freqs = Counter()
-        self.idf_values = {}
-        self.corpus_size = 0
-        self.avg_doc_length = 0.0
-        self.vocabulary = {}
-        self.vocab_size = 0
-        
-        logger.info(f"BM25 initialized with k1={k1}, b={b}")
-    
-    def fit(self, texts: List[str]):
-        """Fit BM25 on corpus"""
-        logger.info(f"Fitting BM25 on {len(texts)} documents")
-        
-        self.corpus_tokens = []
-        self.doc_freqs = Counter()
-        
-        # Tokenize all documents
-        total_length = 0
-        for text in texts:
-            tokens = text_processor.create_bm25_tokens(text)
-            self.corpus_tokens.append(tokens)
-            total_length += len(tokens)
-            
-            # Count document frequencies
-            unique_tokens = set(tokens)
-            for token in unique_tokens:
-                self.doc_freqs[token] += 1
-        
-        self.corpus_size = len(texts)
-        self.avg_doc_length = total_length / self.corpus_size if self.corpus_size > 0 else 0
-        
-        # Create vocabulary mapping
-        self.vocabulary = {token: idx for idx, token in enumerate(self.doc_freqs.keys())}
-        self.vocab_size = len(self.vocabulary)
-        
-        # Calculate IDF values
-        self._calculate_idf()
-        
-        logger.info(f"BM25 fitted: vocab_size={self.vocab_size}, avg_doc_length={self.avg_doc_length:.2f}")
-    
-    def _calculate_idf(self):
-        """Calculate IDF values for all terms"""
-        self.idf_values = {}
-        for term, doc_freq in self.doc_freqs.items():
-            idf = math.log((self.corpus_size - doc_freq + 0.5) / (doc_freq + 0.5) + 1.0)
-            self.idf_values[term] = max(idf, 0.01)  # Minimum IDF to avoid zero
-    
-    @log_performance
-    def encode(self, texts: Union[str, List[str]]) -> List[Dict[str, Any]]:
-        """Encode texts to sparse vectors"""
-        if isinstance(texts, str):
-            texts = [texts]
-        
-        sparse_vectors = []
-        for text in texts:
-            sparse_vector = self._encode_single(text)
-            sparse_vectors.append(sparse_vector)
-        
-        logger.debug(f"Encoded {len(texts)} texts to sparse vectors")
-        return sparse_vectors
-    
-    def _encode_single(self, text: str) -> Dict[str, Any]:
-        """Encode single text to sparse vector"""
-        tokens = text_processor.create_bm25_tokens(text)
-        token_counts = Counter(tokens)
-        doc_length = len(tokens)
-        
-        indices = []
-        values = []
-        
-        for token, count in token_counts.items():
-            if token in self.vocabulary:
-                idx = self.vocabulary[token]
-                idf = self.idf_values[token]
-                
-                # BM25 score calculation
-                tf = count
-                norm_factor = self.k1 * (1 - self.b + self.b * (doc_length / self.avg_doc_length))
-                score = idf * (tf * (self.k1 + 1)) / (tf + norm_factor)
-                
-                if score > 0:
-                    indices.append(idx)
-                    values.append(score)
-        
-        return {
-            "indices": indices,
-            "values": values
-        }
-    
-    def encode_query(self, query: str) -> Dict[str, Any]:
-        """Encode query for search"""
-        return self._encode_single(query)
-    
-    def get_vocab_size(self) -> int:
-        """Get vocabulary size"""
-        return self.vocab_size
+# Use the optimized BM25 implementation with all its performance benefits
+BM25Embedding = OptimizedBM25Embedding
 
 
 class HybridEmbedding:

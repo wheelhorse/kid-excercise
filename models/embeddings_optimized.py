@@ -5,6 +5,9 @@ import numpy as np
 import os
 import torch
 import multiprocessing as mp
+import pickle
+import json
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from sentence_transformers import SentenceTransformer
 from collections import Counter
@@ -23,11 +26,16 @@ logger = Logger.get_logger("hybrid_search.embeddings_optimized")
 class OptimizedBGEEmbedding:
     """CPU-Optimized BGE-M3 dense embedding model"""
     
-    def __init__(self, model_name: str = BGE_M3_MODEL, device: str = EMBEDDING_DEVICE):
+    def __init__(self, model_name: str = BGE_M3_MODEL, device: str = EMBEDDING_DEVICE, cache_dir: str = "./model_cache"):
         """Initialize optimized BGE-M3 model"""
         self.model_name = model_name
         self.device = device
         self.model = None
+        
+        # Cache settings
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.bge_cache_path = self.cache_dir / "bge_m3_model.pkl"
         
         # CPU optimization settings
         self.cpu_count = os.cpu_count() or 1
@@ -212,7 +220,7 @@ class OptimizedBGEEmbedding:
 class OptimizedBM25Embedding:
     """CPU-Optimized BM25 sparse embedding with parallel processing"""
     
-    def __init__(self, k1: float = 1.2, b: float = 0.75):
+    def __init__(self, k1: float = 1.2, b: float = 0.75, cache_dir: str = "./model_cache"):
         """Initialize optimized BM25 parameters"""
         self.k1 = k1
         self.b = b
@@ -224,9 +232,17 @@ class OptimizedBM25Embedding:
         self.vocabulary = {}
         self.vocab_size = 0
         
+        # Cache settings
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.bm25_cache_path = self.cache_dir / "bm25_latest.pkl"
+        
         # CPU optimization settings
         self.cpu_count = os.cpu_count() or 1
         self.optimal_workers = min(self.cpu_count, 64)  # Cap workers for memory efficiency
+        
+        # Try to load existing model first
+        self._try_load_cached_model()
         
         logger.info(f"Optimized BM25 initialized with k1={k1}, b={b}, workers={self.optimal_workers}")
     
@@ -245,6 +261,9 @@ class OptimizedBM25Embedding:
         
         # Calculate IDF values
         self._calculate_idf()
+        
+        # Save fitted model to cache
+        self._save_model()
         
         logger.info(f"Optimized BM25 fitted: vocab_size={self.vocab_size}, "
                    f"avg_doc_length={self.avg_doc_length:.2f}")
@@ -373,22 +392,84 @@ class OptimizedBM25Embedding:
     def get_vocab_size(self) -> int:
         """Get vocabulary size"""
         return self.vocab_size
+    
+    def _try_load_cached_model(self):
+        """Try to load cached BM25 model if available"""
+        if self.bm25_cache_path.exists():
+            try:
+                logger.info(f"Loading cached BM25 model from {self.bm25_cache_path}")
+                with open(self.bm25_cache_path, 'rb') as f:
+                    cached_data = pickle.load(f)
+                
+                # Restore model state
+                self.doc_freqs = cached_data['doc_freqs']
+                self.idf_values = cached_data['idf_values']
+                self.corpus_size = cached_data['corpus_size']
+                self.avg_doc_length = cached_data['avg_doc_length']
+                self.vocabulary = cached_data['vocabulary']
+                self.vocab_size = cached_data['vocab_size']
+                self.k1 = cached_data.get('k1', self.k1)
+                self.b = cached_data.get('b', self.b)
+                
+                logger.info(f"Cached BM25 model loaded: vocab_size={self.vocab_size}, "
+                           f"corpus_size={self.corpus_size}")
+                return True
+                
+            except Exception as e:
+                logger.warning(f"Failed to load cached BM25 model: {e}")
+                # Clear corrupted cache
+                try:
+                    self.bm25_cache_path.unlink()
+                except:
+                    pass
+        
+        return False
+    
+    def _save_model(self):
+        """Save current BM25 model state to cache"""
+        try:
+            cache_data = {
+                'doc_freqs': self.doc_freqs,
+                'idf_values': self.idf_values,
+                'corpus_size': self.corpus_size,
+                'avg_doc_length': self.avg_doc_length,
+                'vocabulary': self.vocabulary,
+                'vocab_size': self.vocab_size,
+                'k1': self.k1,
+                'b': self.b,
+                'saved_at': str(Path.cwd())  # For debugging
+            }
+            
+            # Atomic write using temporary file
+            temp_path = self.bm25_cache_path.with_suffix('.tmp')
+            with open(temp_path, 'wb') as f:
+                pickle.dump(cache_data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+            # Atomic move
+            temp_path.replace(self.bm25_cache_path)
+            
+            logger.info(f"BM25 model saved to cache: {self.bm25_cache_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save BM25 model to cache: {e}")
 
 
 class OptimizedHybridEmbedding:
     """CPU-Optimized hybrid embedding combining BGE-M3 dense and BM25 sparse"""
     
-    def __init__(self, dense_weight: float = 0.7, sparse_weight: float = 0.3):
+    def __init__(self, dense_weight: float = 0.7, sparse_weight: float = 0.3, cache_dir: str = "./model_cache"):
         """Initialize optimized hybrid embedding"""
         self.dense_weight = dense_weight
         self.sparse_weight = sparse_weight
+        self.cache_dir = cache_dir
         
-        self.bge_model = OptimizedBGEEmbedding()
-        self.bm25_model = OptimizedBM25Embedding()
+        # Initialize models with shared cache directory
+        self.bge_model = OptimizedBGEEmbedding(cache_dir=cache_dir)
+        self.bm25_model = OptimizedBM25Embedding(cache_dir=cache_dir)
         self.is_fitted = False
         
         logger.info(f"Optimized hybrid embedding initialized: "
-                   f"dense_weight={dense_weight}, sparse_weight={sparse_weight}")
+                   f"dense_weight={dense_weight}, sparse_weight={sparse_weight}, cache_dir={cache_dir}")
     
     def fit(self, texts: List[str], use_parallel: bool = True):
         """Fit both models on corpus with parallel processing"""

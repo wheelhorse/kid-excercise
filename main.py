@@ -158,12 +158,21 @@ class TerminalInterface:
             print(f"{rank:<4} {candidate_id:<4} {name:<20} {rrf_score:<10.4f} {dense_rank:<8} {sparse_rank:<8} {skills:<25}")
         
         # Ask if user wants details
-        print(f"\nEnter candidate ID for details (1-{len(candidates)}) or press Enter to continue:")
+        print(f"\nEnter candidate rank for details (1-{len(candidates)}) or press Enter to continue:")
         detail_input = input("> ").strip()
         
         if detail_input.isdigit():
-            candidate_id = int(detail_input)
-            self.show_candidate_details(candidate_id)
+            rank = int(detail_input)
+            if 1 <= rank <= len(candidates):
+                # Get the actual candidate_id from the selected candidate
+                selected_candidate = candidates[rank - 1]
+                candidate_id = selected_candidate.get('candidate_id')
+                if candidate_id:
+                    self.show_candidate_details(candidate_id)
+                else:
+                    print("❌ Candidate ID not found!")
+            else:
+                print(f"❌ Invalid rank! Please enter a number between 1 and {len(candidates)}.")
     
     def show_candidate_details(self, candidate_id: int):
         """Show detailed candidate information"""

@@ -1,11 +1,14 @@
 """
-Intel-optimized Embedding models using Intel PyTorch/IPEX acceleration
+Intel-optimized Embedding models using Intel PyTorch/IPEX acceleration with caching support
 Focus on Intel Extension for PyTorch (IPEX) and Intel MKL optimizations
 """
 import numpy as np
 import os
+import pickle
+import tempfile
 import torch
 import multiprocessing as mp
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from sentence_transformers import SentenceTransformer
 from collections import Counter
@@ -36,16 +39,20 @@ logger = Logger.get_logger("hybrid_search.embeddings_intel_optimized")
 
 
 class IntelOptimizedBGEEmbedding:
-    """Intel-optimized BGE-M3 dense embedding model with Intel hardware acceleration"""
+    """Intel-optimized BGE-M3 dense embedding model with Intel hardware acceleration and caching"""
     
-    def __init__(self, model_name: str = BGE_M3_MODEL, device: str = EMBEDDING_DEVICE):
-        """Initialize Intel-optimized BGE-M3 model"""
+    def __init__(self, model_name: str = BGE_M3_MODEL, device: str = EMBEDDING_DEVICE, cache_dir: str = "./model_cache"):
+        """Initialize Intel-optimized BGE-M3 model with caching"""
         self.model_name = model_name
         self.device = device
+        self.cache_dir = Path(cache_dir)
         self.model = None
         self.openvino_model = None
         self.optimization_type = "standard"
         self.is_intel_cpu = self._detect_intel_cpu()
+        
+        # Ensure cache directory exists
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         
         # CPU optimization settings
         self.cpu_count = os.cpu_count() or 1
@@ -60,7 +67,7 @@ class IntelOptimizedBGEEmbedding:
         
         logger.info(f"Intel-optimized BGE model initialized: {self.optimization_type}, "
                    f"Intel CPU: {self.is_intel_cpu}, threads={self.optimal_threads}, "
-                   f"batch_size={self.optimal_batch_size}")
+                   f"batch_size={self.optimal_batch_size}, cache_dir={cache_dir}")
     
     def _detect_intel_cpu(self) -> bool:
         """Detect if running on Intel CPU"""
