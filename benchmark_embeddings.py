@@ -94,7 +94,7 @@ class EmbeddingBenchmark:
     
     def _benchmark_dataset(self, texts: List[str], iterations: int) -> Dict[str, Any]:
         """Benchmark all optimizations on a specific dataset"""
-        optimizations = ['standard', 'optimized', 'intel_optimized', 'amd_optimized']
+        optimizations = ['standard', 'optimized', 'intel_optimized']
         results = {}
         
         for opt in optimizations:
@@ -338,7 +338,7 @@ def run_quick_benchmark():
     texts = benchmark.test_datasets['small']
     results = {}
     
-    optimizations = ['standard', 'optimized', 'intel_optimized', 'amd_optimized']
+    optimizations = ['standard', 'optimized', 'intel_optimized']
     
     for opt in optimizations:
         print(f"Testing {opt}...")

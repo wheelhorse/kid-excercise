@@ -467,4 +467,4 @@ if __name__ == "__main__":
         print(install_intel_optimization_libraries())
     else:
         print("\n=== Non-Intel CPU Detected ===")
-        print("Consider using embeddings_optimized.py or embeddings_amd_optimized.py instead")
+        print("Consider using embeddings_optimized.py instead")

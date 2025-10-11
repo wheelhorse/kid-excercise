@@ -20,7 +20,7 @@ class SmartEmbeddingFactory:
         
         Args:
             force_optimization: Override automatic detection ('standard', 'optimized', 
-                              'intel_optimized', 'amd_optimized')
+                              'intel_optimized')
         """
         self.cpu_info = cpu_detector.get_cpu_info()
         self.force_optimization = force_optimization
@@ -46,8 +46,8 @@ class SmartEmbeddingFactory:
             logger.info(f"Using recommended optimization: {recommended}")
             return recommended
         
-        # Fallback hierarchy
-        fallback_order = ['intel_optimized', 'amd_optimized', 'optimized', 'standard']
+        # Fallback hierarchy - removed amd_optimized, use optimized for all non-Intel CPUs
+        fallback_order = ['intel_optimized', 'optimized', 'standard']
         
         for optimization in fallback_order:
             if self._is_optimization_available(optimization):
@@ -69,9 +69,6 @@ class SmartEmbeddingFactory:
                 return True
             elif optimization == 'intel_optimized':
                 from . import embeddings_intel_optimized
-                return True
-            elif optimization == 'amd_optimized':
-                from . import embeddings_amd_optimized
                 return True
             return False
         except ImportError as e:
@@ -96,13 +93,7 @@ class SmartEmbeddingFactory:
     def _load_bge_model(self):
         """Load the appropriate BGE model based on selected optimization"""
         try:
-            if self.selected_optimization == 'amd_optimized':
-                from .embeddings_amd_optimized import AMDOptimizedBGEEmbedding
-                model = AMDOptimizedBGEEmbedding()
-                logger.info("Loaded AMD-optimized BGE model")
-                return model
-            
-            elif self.selected_optimization == 'intel_optimized':
+            if self.selected_optimization == 'intel_optimized':
                 from .embeddings_intel_optimized import IntelOptimizedBGEEmbedding
                 model = IntelOptimizedBGEEmbedding()
                 logger.info("Loaded Intel-optimized BGE model")
@@ -129,13 +120,7 @@ class SmartEmbeddingFactory:
     def _load_hybrid_model(self):
         """Load the appropriate hybrid model based on selected optimization"""
         try:
-            if self.selected_optimization == 'amd_optimized':
-                from .embeddings_amd_optimized import AMDOptimizedHybridEmbedding
-                model = AMDOptimizedHybridEmbedding()
-                logger.info("Loaded AMD-optimized hybrid model")
-                return model
-            
-            elif self.selected_optimization == 'intel_optimized':
+            if self.selected_optimization == 'intel_optimized':
                 from .embeddings_intel_optimized import IntelOptimizedHybridEmbedding
                 model = IntelOptimizedHybridEmbedding()
                 logger.info("Loaded Intel-optimized hybrid model")
@@ -185,7 +170,7 @@ class SmartEmbeddingFactory:
         """Benchmark all available optimizations for comparison"""
         logger.info(f"Benchmarking all available optimizations with {len(test_texts)} texts")
         
-        optimizations = ['standard', 'optimized', 'intel_optimized', 'amd_optimized']
+        optimizations = ['standard', 'optimized', 'intel_optimized']
         results = {}
         
         for opt in optimizations:
@@ -243,7 +228,7 @@ class SmartEmbeddingFactory:
         
         # Check availability of all optimizations
         print(f"\nOptimization Availability:")
-        optimizations = ['standard', 'optimized', 'intel_optimized', 'amd_optimized']
+        optimizations = ['standard', 'optimized', 'intel_optimized']
         for opt in optimizations:
             available = self._is_optimization_available(opt)
             status = "✓ Available" if available else "✗ Not Available"

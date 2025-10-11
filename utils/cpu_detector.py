@@ -339,15 +339,15 @@ class CPUDetector:
             if architecture == 'Zen 3' and physical_cores >= 8:  # AMD 5700G, 5800X, etc.
                 optimal_threads = min(14, logical_cores - 2)  # Leave 2-4 threads for system
                 optimal_batch_size = 32
-                recommended_optimization = 'amd_optimized'
+                recommended_optimization = 'optimized'
             elif physical_cores >= 6:
                 optimal_threads = min(logical_cores - 2, 12)
                 optimal_batch_size = 24
-                recommended_optimization = 'amd_optimized'
+                recommended_optimization = 'optimized'
             elif physical_cores >= 4:
                 optimal_threads = min(logical_cores - 1, 8)
                 optimal_batch_size = 16
-                recommended_optimization = 'amd_optimized'
+                recommended_optimization = 'optimized'
             else:
                 optimal_threads = logical_cores
                 optimal_batch_size = 8
