@@ -418,10 +418,12 @@ def main():
             candidates = results.get("results", [])
             print(f"\n📋 Found {len(candidates)} candidates:")
             for candidate in candidates:
-                name = f"{candidate.get('first_name', '')} {candidate.get('last_name', '')}".strip()
+                name = f"{candidate.get('last_name', '')} {candidate.get('first_name', '')}".strip()
                 score = candidate.get('rrf_score', 0.0)
                 skills = candidate.get('key_skills', '')
-                print(f"  {candidate.get('rank', 'N/A')}. {name} (Score: {score:.4f}) - {skills}")
+                sparse_score = candidate.get('sparse_score', '')
+                dense_score = candidate.get('dense_score', '')
+                print(f"  {candidate.get('rank', 'N/A')}. {name} (Score: {score:.4f}, sparse-{sparse_score}, dense-{dense_score}) - {skills}")
         return
     
     # Run interactive mode
