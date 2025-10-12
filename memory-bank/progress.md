@@ -27,6 +27,16 @@ The hybrid search system is functionally complete with sophisticated CPU optimiz
 - **Error Recovery**: Retry mechanisms and connection management
 - **Data Mapping**: Candidate ID preservation for result enrichment
 
+### Unified Model Cache System (100% Complete) 🆕
+- **Centralized Management**: Single ModelCacheManager for all model types
+- **Dense Model Caching**: BGE-M3 models cached in `model_cache/sentence_transformers/` (91.9 MB)
+- **Sparse Model Integration**: BM25 models integrated with unified cache system
+- **Jieba Model Caching**: Chinese tokenization dictionaries cached in `model_cache/jieba/`
+- **Cache Metadata**: Rich tracking with model info, sizes, and validation
+- **Automatic Downloads**: Model downloader ensures all required models are cached
+- **Cache Validation**: Integrity checks and cleanup utilities
+- **Performance Benefits**: Eliminates duplicate cache mechanisms, centralized control
+
 ### Configuration & Utilities (100% Complete)
 - **Environment Configuration**: Hierarchical config loading
 - **Structured Logging**: JSON-formatted logs with performance metrics
