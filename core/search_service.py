@@ -102,12 +102,57 @@ class SearchService:
                 return {"error": "Failed to connect to search database", "results": []}
             
             # Perform hybrid search
+            logger.info(f"Performing hybrid search with query: '{full_query[:100]}...' (truncated)")
+            logger.info(f"Search parameters: limit={limit}, dense_weight={dense_weight}, sparse_weight={sparse_weight}")
+            
             search_results = qdrant_manager.hybrid_search(
                 query=full_query,
                 limit=limit,
                 dense_weight=dense_weight,
                 sparse_weight=sparse_weight
             )
+            
+            # Debug: Log raw search results with candidate IDs and names
+            if search_results:
+                logger.info(f"Raw hybrid search returned {len(search_results)} results:")
+                for i, result in enumerate(search_results[:10]):  # Log first 10 results
+                    candidate_id = result.get("candidate_id", "unknown")
+                    payload = result.get("payload", {})
+                    first_name = payload.get("first_name", "")
+                    last_name = payload.get("last_name", "")
+                    name = f"{first_name} {last_name}".strip() or "No name"
+                    rrf_score = result.get("rrf_score", 0.0)
+                    dense_score = result.get("dense_score", 0.0)
+                    sparse_score = result.get("sparse_score", 0.0)
+                    
+                    logger.info(f"  [{i+1}] ID:{candidate_id} Name:'{name}' RRF:{rrf_score:.4f} Dense:{dense_score:.4f} Sparse:{sparse_score:.4f}")
+                
+                if len(search_results) > 10:
+                    logger.info(f"  ... and {len(search_results) - 10} more results")
+                    
+                # Special check for target candidates
+                target_names = ["徐佳芸", "赵浩海"]
+                found_targets = []
+                for result in search_results:
+                    payload = result.get("payload", {})
+                    first_name = payload.get("first_name", "")
+                    last_name = payload.get("last_name", "")
+                    full_name = f"{first_name}{last_name}".strip()
+                    
+                    if any(target in full_name for target in target_names):
+                        found_targets.append({
+                            "name": full_name,
+                            "candidate_id": result.get("candidate_id"),
+                            "rank": search_results.index(result) + 1,
+                            "rrf_score": result.get("rrf_score", 0.0)
+                        })
+                
+                if found_targets:
+                    logger.info(f"Target candidates found in results: {found_targets}")
+                else:
+                    logger.warning(f"Target candidates {target_names} NOT found in search results!")
+            else:
+                logger.warning("Hybrid search returned no results")
             
             if not search_results:
                 logger.info("No candidates found matching the criteria")

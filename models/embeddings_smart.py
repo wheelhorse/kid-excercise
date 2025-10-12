@@ -236,28 +236,52 @@ class SmartEmbeddingFactory:
             print(f"  {opt}: {status}{marker}")
 
 
-# Global smart factory instance (default auto-detection)
-smart_factory = SmartEmbeddingFactory()
+# Global singleton instance - lazy initialization
+_global_smart_factory = None
+_global_bge_model = None
+_global_hybrid_model = None
 
-# Convenient global instances
-smart_bge_model = smart_factory.get_bge_model()
-smart_hybrid_model = smart_factory.get_hybrid_model()
+
+def get_smart_factory() -> SmartEmbeddingFactory:
+    """Get global smart factory instance with lazy initialization"""
+    global _global_smart_factory
+    if _global_smart_factory is None:
+        _global_smart_factory = SmartEmbeddingFactory()
+    return _global_smart_factory
 
 
 def get_smart_bge_model(force_optimization: Optional[str] = None):
-    """Get smart BGE model with optional optimization override"""
+    """Get smart BGE model with optional optimization override and lazy initialization"""
+    global _global_bge_model
+    
     if force_optimization:
+        # Create temporary factory for forced optimization
         factory = SmartEmbeddingFactory(force_optimization=force_optimization)
         return factory.get_bge_model()
-    return smart_bge_model
+    
+    # Use global singleton with lazy initialization
+    if _global_bge_model is None:
+        factory = get_smart_factory()
+        _global_bge_model = factory.get_bge_model()
+    
+    return _global_bge_model
 
 
 def get_smart_hybrid_model(force_optimization: Optional[str] = None):
-    """Get smart hybrid model with optional optimization override"""
+    """Get smart hybrid model with optional optimization override and lazy initialization"""
+    global _global_hybrid_model
+    
     if force_optimization:
+        # Create temporary factory for forced optimization
         factory = SmartEmbeddingFactory(force_optimization=force_optimization)
         return factory.get_hybrid_model()
-    return smart_hybrid_model
+    
+    # Use global singleton with lazy initialization
+    if _global_hybrid_model is None:
+        factory = get_smart_factory()
+        _global_hybrid_model = factory.get_hybrid_model()
+    
+    return _global_hybrid_model
 
 
 def benchmark_optimizations(test_texts: Optional[List[str]] = None, 
@@ -269,33 +293,35 @@ def benchmark_optimizations(test_texts: Optional[List[str]] = None,
             for i in range(50)
         ]
     
-    return smart_factory.benchmark_all_available(test_texts, iterations)
+    factory = get_smart_factory()
+    return factory.benchmark_all_available(test_texts, iterations)
 
 
 def print_smart_report():
     """Print comprehensive smart factory report"""
-    smart_factory.print_selection_report()
+    factory = get_smart_factory()
+    factory.print_selection_report()
 
 
 # Configuration utilities
 def force_optimization(optimization: str):
     """Force a specific optimization globally"""
-    global smart_factory, smart_bge_model, smart_hybrid_model
+    global _global_smart_factory, _global_bge_model, _global_hybrid_model
     
     logger.info(f"Forcing optimization to: {optimization}")
-    smart_factory = SmartEmbeddingFactory(force_optimization=optimization)
-    smart_bge_model = smart_factory.get_bge_model()
-    smart_hybrid_model = smart_factory.get_hybrid_model()
+    _global_smart_factory = SmartEmbeddingFactory(force_optimization=optimization)
+    _global_bge_model = None  # Reset to trigger lazy loading with new factory
+    _global_hybrid_model = None  # Reset to trigger lazy loading with new factory
 
 
 def reset_to_auto():
     """Reset to automatic optimization detection"""
-    global smart_factory, smart_bge_model, smart_hybrid_model
+    global _global_smart_factory, _global_bge_model, _global_hybrid_model
     
     logger.info("Resetting to automatic optimization detection")
-    smart_factory = SmartEmbeddingFactory()
-    smart_bge_model = smart_factory.get_bge_model()
-    smart_hybrid_model = smart_factory.get_hybrid_model()
+    _global_smart_factory = None  # Reset to trigger lazy auto-detection
+    _global_bge_model = None  # Reset to trigger lazy loading
+    _global_hybrid_model = None  # Reset to trigger lazy loading
 
 
 # Environment variable support
@@ -322,10 +348,12 @@ if __name__ == "__main__":
     test_texts = ["Hello world", "This is a test", "Smart embedding selection"]
     
     try:
-        embeddings = smart_bge_model.encode(test_texts)
+        bge_model = get_smart_bge_model()
+        embeddings = bge_model.encode(test_texts)
         print(f"Successfully encoded {len(test_texts)} texts to shape: {embeddings.shape}")
         
-        hybrid_result = smart_hybrid_model.encode(test_texts)
+        hybrid_model = get_smart_hybrid_model()
+        hybrid_result = hybrid_model.encode(test_texts)
         print(f"Hybrid encoding successful: dense={hybrid_result['dense'].shape}, "
               f"sparse={len(hybrid_result['sparse'])} vectors")
         

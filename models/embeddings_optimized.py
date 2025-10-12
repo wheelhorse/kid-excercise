@@ -578,7 +578,43 @@ class OptimizedHybridEmbedding:
         }
 
 
-# Global optimized instances
-optimized_bge_model = OptimizedBGEEmbedding()
-optimized_bm25_model = OptimizedBM25Embedding()
-optimized_hybrid_model = OptimizedHybridEmbedding()
+# Global optimized instances - lazy initialization
+_optimized_bge_model = None
+_optimized_bm25_model = None
+_optimized_hybrid_model = None
+
+
+def get_optimized_bge_model() -> OptimizedBGEEmbedding:
+    """Get global optimized BGE model instance with lazy initialization"""
+    global _optimized_bge_model
+    if _optimized_bge_model is None:
+        _optimized_bge_model = OptimizedBGEEmbedding()
+    return _optimized_bge_model
+
+
+def get_optimized_bm25_model() -> OptimizedBM25Embedding:
+    """Get global optimized BM25 model instance with lazy initialization"""
+    global _optimized_bm25_model
+    if _optimized_bm25_model is None:
+        _optimized_bm25_model = OptimizedBM25Embedding()
+    return _optimized_bm25_model
+
+
+def get_optimized_hybrid_model() -> OptimizedHybridEmbedding:
+    """Get global optimized hybrid model instance with lazy initialization"""
+    global _optimized_hybrid_model
+    if _optimized_hybrid_model is None:
+        _optimized_hybrid_model = OptimizedHybridEmbedding()
+    return _optimized_hybrid_model
+
+
+# Backward compatibility - deprecated, use factory functions instead
+def get_legacy_instances():
+    """Get legacy global instances - deprecated, use factory functions instead"""
+    import warnings
+    warnings.warn(
+        "Direct access to global instances is deprecated. Use get_optimized_*_model() functions instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return get_optimized_bge_model(), get_optimized_bm25_model(), get_optimized_hybrid_model()

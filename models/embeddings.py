@@ -182,7 +182,31 @@ class HybridEmbedding:
         return self.bm25_model.get_vocab_size()
 
 
-# Global instances
-bge_model = BGEEmbedding()
-bm25_model = BM25Embedding()
-hybrid_model = HybridEmbedding()
+# Global instances - lazy initialization
+_bge_model = None
+_bm25_model = None
+_hybrid_model = None
+
+
+def get_bge_model() -> BGEEmbedding:
+    """Get global BGE model instance with lazy initialization"""
+    global _bge_model
+    if _bge_model is None:
+        _bge_model = BGEEmbedding()
+    return _bge_model
+
+
+def get_bm25_model() -> BM25Embedding:
+    """Get global BM25 model instance with lazy initialization"""
+    global _bm25_model
+    if _bm25_model is None:
+        _bm25_model = BM25Embedding()
+    return _bm25_model
+
+
+def get_hybrid_model() -> HybridEmbedding:
+    """Get global hybrid model instance with lazy initialization"""
+    global _hybrid_model
+    if _hybrid_model is None:
+        _hybrid_model = HybridEmbedding()
+    return _hybrid_model

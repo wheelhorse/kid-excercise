@@ -407,9 +407,27 @@ class IntelOptimizedHybridEmbedding:
         }
 
 
-# Global Intel-optimized instances
-intel_optimized_bge_model = IntelOptimizedBGEEmbedding()
-intel_optimized_hybrid_model = IntelOptimizedHybridEmbedding()
+# Global Intel-optimized instances - lazy initialization
+_intel_optimized_bge_model = None
+_intel_optimized_hybrid_model = None
+
+
+def get_intel_optimized_bge_model() -> IntelOptimizedBGEEmbedding:
+    """Get global Intel-optimized BGE model instance with lazy initialization"""
+    global _intel_optimized_bge_model
+    if _intel_optimized_bge_model is None:
+        _intel_optimized_bge_model = IntelOptimizedBGEEmbedding()
+    return _intel_optimized_bge_model
+
+
+def get_intel_optimized_hybrid_model() -> IntelOptimizedHybridEmbedding:
+    """Get global Intel-optimized hybrid model instance with lazy initialization"""
+    global _intel_optimized_hybrid_model
+    if _intel_optimized_hybrid_model is None:
+        _intel_optimized_hybrid_model = IntelOptimizedHybridEmbedding()
+    return _intel_optimized_hybrid_model
+
+
 
 
 def install_intel_optimization_libraries():
