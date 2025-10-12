@@ -17,6 +17,8 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
 import warnings
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 # Intel-specific high-performance libraries
 try:
     import openvino as ov

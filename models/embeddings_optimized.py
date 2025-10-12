@@ -24,6 +24,7 @@ from .text_preprocessing import preprocess_texts_consistent, preprocess_single_t
 
 logger = Logger.get_logger("hybrid_search.embeddings_optimized")
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 class OptimizedBGEEmbedding:
     """CPU-Optimized BGE-M3 dense embedding model"""
