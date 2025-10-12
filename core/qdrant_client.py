@@ -240,7 +240,10 @@ class QdrantManager:
         """Create searchable text from candidate record"""
         parts = []
         
+        if candidate.first_name:
+            parts.append(candidate.first_name)
         if candidate.last_name:
+            parts.append(candidate.last_name)
             parts.append(candidate.last_name+candidate.first_name)
         if candidate.key_skills:
             parts.append(candidate.key_skills)
@@ -278,6 +281,7 @@ class QdrantManager:
                 values=sparse_query_data["values"]
             )
             
+            print(sparse_query)
             # Perform searches
             dense_results = self._dense_search(dense_query, limit)
             sparse_results = self._sparse_search(sparse_query, limit)
