@@ -17,6 +17,8 @@ from functools import partial
 
 from utils.logger import Logger, log_performance
 from utils.text_processor import text_processor
+from utils.model_cache_manager import cache_manager
+from utils.model_downloader import model_downloader
 from config import BGE_M3_MODEL, EMBEDDING_DEVICE, MAX_TEXT_LENGTH
 from .text_preprocessing import preprocess_texts_consistent, preprocess_single_text
 
@@ -27,15 +29,10 @@ class OptimizedBGEEmbedding:
     """CPU-Optimized BGE-M3 dense embedding model"""
     
     def __init__(self, model_name: str = BGE_M3_MODEL, device: str = EMBEDDING_DEVICE, cache_dir: str = "./model_cache"):
-        """Initialize optimized BGE-M3 model"""
+        """Initialize optimized BGE-M3 model with unified caching"""
         self.model_name = model_name
         self.device = device
         self.model = None
-        
-        # Cache settings
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.bge_cache_path = self.cache_dir / "bge_m3_model.pkl"
         
         # CPU optimization settings
         self.cpu_count = os.cpu_count() or 1
@@ -45,10 +42,21 @@ class OptimizedBGEEmbedding:
         # Set PyTorch threading for optimal CPU usage (only if not already set)
         self._set_thread_settings()
         
+        # Ensure models are downloaded and cached
+        self._ensure_model_cached()
+        
         self._load_model()
         
         logger.info(f"Optimized BGE model initialized: threads={self.optimal_threads}, "
                    f"batch_size={self.optimal_batch_size}, cpu_count={self.cpu_count}")
+    
+    def _ensure_model_cached(self):
+        """Ensure model is downloaded and cached"""
+        if not cache_manager.is_dense_model_cached(self.model_name):
+            logger.info(f"Dense model {self.model_name} not cached, downloading...")
+            model_downloader.download_dense_model(self.model_name)
+        else:
+            logger.debug(f"Dense model {self.model_name} found in cache")
     
     def _set_thread_settings(self):
         """Set thread settings safely"""
@@ -73,16 +81,19 @@ class OptimizedBGEEmbedding:
         return min(base_batch_size, 256)  # Cap at 256 to avoid memory issues
     
     def _load_model(self):
-        """Load the BGE-M3 model with CPU optimizations"""
+        """Load the BGE-M3 model with CPU optimizations from unified cache"""
         try:
             logger.info(f"Loading optimized BGE-M3 model: {self.model_name}")
+            
+            # Configure cache environment for SentenceTransformers
+            os.environ['SENTENCE_TRANSFORMERS_HOME'] = str(cache_manager.dense_cache_dir)
             
             # Load model with CPU-specific optimizations
             self.model = SentenceTransformer(
                 self.model_name, 
                 device=self.device,
-                # Enable CPU optimizations
-                cache_folder=None  # Use default cache
+                # Use unified cache
+                cache_folder=str(cache_manager.dense_cache_dir)
             )
             
             # Apply CPU-specific optimizations to the model
@@ -90,7 +101,7 @@ class OptimizedBGEEmbedding:
                 # Enable CPU optimizations for transformers
                 self._optimize_for_cpu()
             
-            logger.info(f"Optimized BGE-M3 model loaded successfully on {self.device}")
+            logger.info(f"Optimized BGE-M3 model loaded successfully from cache on {self.device}")
             
         except Exception as e:
             logger.error(f"Failed to load optimized BGE-M3 model: {str(e)}")
@@ -232,10 +243,8 @@ class OptimizedBM25Embedding:
         self.vocabulary = {}
         self.vocab_size = 0
         
-        # Cache settings
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.bm25_cache_path = self.cache_dir / "bm25_latest.pkl"
+        # Use unified cache manager for BM25 cache path
+        self.bm25_cache_path = cache_manager.get_bm25_cache_path()
         
         # CPU optimization settings
         self.cpu_count = os.cpu_count() or 1
@@ -394,7 +403,7 @@ class OptimizedBM25Embedding:
         return self.vocab_size
     
     def _try_load_cached_model(self):
-        """Try to load cached BM25 model if available"""
+        """Try to load cached BM25 model using unified cache system"""
         if self.bm25_cache_path.exists():
             try:
                 logger.info(f"Loading cached BM25 model from {self.bm25_cache_path}")
@@ -411,6 +420,20 @@ class OptimizedBM25Embedding:
                 self.k1 = cached_data.get('k1', self.k1)
                 self.b = cached_data.get('b', self.b)
                 
+                # Register with unified cache manager
+                cache_manager.register_model(
+                    model_type="sparse",
+                    model_name="bm25",
+                    cache_path=self.bm25_cache_path,
+                    metadata={
+                        "vocab_size": self.vocab_size,
+                        "corpus_size": self.corpus_size,
+                        "k1": self.k1,
+                        "b": self.b,
+                        "avg_doc_length": self.avg_doc_length
+                    }
+                )
+                
                 logger.info(f"Cached BM25 model loaded: vocab_size={self.vocab_size}, "
                            f"corpus_size={self.corpus_size}")
                 return True
@@ -426,7 +449,7 @@ class OptimizedBM25Embedding:
         return False
     
     def _save_model(self):
-        """Save current BM25 model state to cache"""
+        """Save current BM25 model state to cache with unified cache registration"""
         try:
             cache_data = {
                 'doc_freqs': self.doc_freqs,
@@ -447,6 +470,20 @@ class OptimizedBM25Embedding:
             
             # Atomic move
             temp_path.replace(self.bm25_cache_path)
+            
+            # Register with unified cache manager
+            cache_manager.register_model(
+                model_type="sparse",
+                model_name="bm25",
+                cache_path=self.bm25_cache_path,
+                metadata={
+                    "vocab_size": self.vocab_size,
+                    "corpus_size": self.corpus_size,
+                    "k1": self.k1,
+                    "b": self.b,
+                    "avg_doc_length": self.avg_doc_length
+                }
+            )
             
             logger.info(f"BM25 model saved to cache: {self.bm25_cache_path}")
             

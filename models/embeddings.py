@@ -13,6 +13,8 @@ import math
 
 from utils.logger import Logger, log_performance
 from utils.text_processor import text_processor
+from utils.model_cache_manager import cache_manager
+from utils.model_downloader import model_downloader
 from config import BGE_M3_MODEL, EMBEDDING_DEVICE, MAX_TEXT_LENGTH
 from .text_preprocessing import preprocess_texts_consistent, preprocess_single_text
 from .embeddings_optimized import OptimizedBM25Embedding
@@ -24,23 +26,34 @@ class BGEEmbedding:
     """BGE-M3 dense embedding model with caching support"""
     
     def __init__(self, model_name: str = BGE_M3_MODEL, device: str = EMBEDDING_DEVICE, cache_dir: str = "./model_cache"):
-        """Initialize BGE-M3 model with caching"""
+        """Initialize BGE-M3 model with unified caching"""
         self.model_name = model_name
         self.device = device
-        self.cache_dir = Path(cache_dir)
         self.model = None
         
-        # Ensure cache directory exists
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Ensure models are downloaded and cached
+        self._ensure_model_cached()
         
         self._load_model()
     
+    def _ensure_model_cached(self):
+        """Ensure model is downloaded and cached"""
+        if not cache_manager.is_dense_model_cached(self.model_name):
+            logger.info(f"Dense model {self.model_name} not cached, downloading...")
+            model_downloader.download_dense_model(self.model_name)
+        else:
+            logger.debug(f"Dense model {self.model_name} found in cache")
+    
     def _load_model(self):
-        """Load the BGE-M3 model"""
+        """Load the BGE-M3 model from cache"""
         try:
             logger.info(f"Loading BGE-M3 model: {self.model_name}")
+            
+            # Configure cache environment for SentenceTransformers
+            os.environ['SENTENCE_TRANSFORMERS_HOME'] = str(cache_manager.dense_cache_dir)
+            
             self.model = SentenceTransformer(self.model_name, device=self.device)
-            logger.info(f"BGE-M3 model loaded successfully on {self.device}")
+            logger.info(f"BGE-M3 model loaded successfully from cache on {self.device}")
         except Exception as e:
             logger.error(f"Failed to load BGE-M3 model: {str(e)}")
             raise
