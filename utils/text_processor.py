@@ -59,23 +59,25 @@ class TextProcessor:
         return text
     
     def tokenize_chinese(self, text: str) -> List[str]:
-        """Tokenize Chinese text using jieba"""
+        """Tokenize Chinese text using jieba.cut_for_search for optimal search performance"""
         if not text:
             return []
         
-        # Use jieba for Chinese segmentation
-        tokens = list(jieba.cut(text, cut_all=False))
+        all_tokens = []
+        
+        # Use jieba.cut_for_search for better search tokenization
+        # This automatically generates more granular tokens for search scenarios
+        search_tokens = list(jieba.cut_for_search(text))
         
         # Filter out stop words and short tokens
-        filtered_tokens = []
-        for token in tokens:
+        for token in search_tokens:
             token = token.strip()
             if (len(token) >= 2 and 
                 token not in self.chinese_stop_words and
                 not token.isspace()):
-                filtered_tokens.append(token)
+                all_tokens.append(token)
         
-        return filtered_tokens
+        return all_tokens
     
     def tokenize_english(self, text: str) -> List[str]:
         """Tokenize English text"""
