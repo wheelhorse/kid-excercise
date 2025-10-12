@@ -72,7 +72,7 @@ class TextProcessor:
         # Filter out stop words and short tokens
         for token in search_tokens:
             token = token.strip()
-            if (len(token) >= 2 and 
+            if (len(token) >= 1 and 
                 token not in self.chinese_stop_words and
                 not token.isspace()):
                 all_tokens.append(token)
@@ -80,30 +80,30 @@ class TextProcessor:
         # Add character-level subsequences for Chinese text (especially names)
         # This enables partial matching like '徐佳' finding '徐佳芸'
         # Since this function handles Chinese text, we can work directly with the characters
-        if text and any('\u4e00' <= c <= '\u9fff' for c in text):
-            # Generate character-level n-grams (1-4 characters) from the text directly
-            for i in range(len(text)):
-                char = text[i]
-                # Skip non-Chinese characters and stop words
-                if '\u4e00' <= char <= '\u9fff' and char not in self.chinese_stop_words:
-                    # Single characters (for very short queries)
-                    all_tokens.append(char)
-                    
-                    # 2-character combinations
-                    if i < len(text) - 1 and '\u4e00' <= text[i + 1] <= '\u9fff':
-                        bigram = text[i:i + 2]
-                        if bigram not in self.chinese_stop_words:
-                            all_tokens.append(bigram)
-                    
-                    # 3-character combinations
-                    if i < len(text) - 2 and all('\u4e00' <= text[i + j] <= '\u9fff' for j in range(3)):
-                        trigram = text[i:i + 3]
-                        all_tokens.append(trigram)
-                    
-                    # 4-character combinations
-                    if i < len(text) - 3 and all('\u4e00' <= text[i + j] <= '\u9fff' for j in range(4)):
-                        four_gram = text[i:i + 4]
-                        all_tokens.append(four_gram)
+        #if text and any('\u4e00' <= c <= '\u9fff' for c in text):
+        #    # Generate character-level n-grams (1-4 characters) from the text directly
+        #    for i in range(len(text)):
+        #        char = text[i]
+        #        # Skip non-Chinese characters and stop words
+        #        if '\u4e00' <= char <= '\u9fff' and char not in self.chinese_stop_words:
+        #            # Single characters (for very short queries)
+        #            all_tokens.append(char)
+        #            
+        #            # 2-character combinations
+        #            if i < len(text) - 1 and '\u4e00' <= text[i + 1] <= '\u9fff':
+        #                bigram = text[i:i + 2]
+        #                if bigram not in self.chinese_stop_words:
+        #                    all_tokens.append(bigram)
+        #            
+        #            # 3-character combinations
+        #            if i < len(text) - 2 and all('\u4e00' <= text[i + j] <= '\u9fff' for j in range(3)):
+        #                trigram = text[i:i + 3]
+        #                all_tokens.append(trigram)
+        #            
+        #            # 4-character combinations
+        #            if i < len(text) - 3 and all('\u4e00' <= text[i + j] <= '\u9fff' for j in range(4)):
+        #                four_gram = text[i:i + 4]
+        #                all_tokens.append(four_gram)
         
         return all_tokens
     
@@ -118,7 +118,7 @@ class TextProcessor:
         # Filter out stop words
         filtered_tokens = [
             token for token in tokens 
-            if token not in self.english_stop_words and len(token) >= 2
+            if token not in self.english_stop_words and len(token) >= 1
         ]
         
         return filtered_tokens
