@@ -25,11 +25,11 @@ def _custom_filter_text(text: str) -> str:
     """
     # Remove hash-like strings (e.g., '903032fca51a55dc1XV90t21F1NUw426UfOdWOKimfDQNhlm1w~~')
     # Pattern: alphanumeric strings of 40+ characters ending with '~~'
-    text = re.sub(r'\b[a-zA-Z0-9]{40,}~~\b', '', text)
+    text = re.sub(r'\b[a-zA-Z0-9_]{20,}~~\b', '', text)
     
     # Also remove similar patterns without '~~' but with similar characteristics
     # Pattern: long alphanumeric strings that look like hashes/tokens
-    text = re.sub(r'\b[a-zA-Z0-9]{32,}\b', lambda m: '' if not any(c.isspace() for c in m.group()) else m.group(), text)
+    text = re.sub(r'\b[a-zA-Z0-9_]{22,}\b', '', text)
     
     # Replace '_rDOTr' with '.'
     text = text.replace('_rDOTr', '.')

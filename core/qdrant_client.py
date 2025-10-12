@@ -4,6 +4,7 @@ Qdrant client for hybrid search with BGE-M3 and BM25
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import numpy as np
+import uuid
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -20,6 +21,20 @@ from database.mariadb_client import CandidateRecord
 
 logger = Logger.get_logger("hybrid_search.qdrant")
 
+# Fixed namespace for your application
+NAMESPACE_UUID = uuid.UUID("12345678-1234-5678-1234-597112345678")
+
+def generate_uuid(candidate_id: int | str) -> str:
+    """
+    Generate a deterministic UUID for a candidate based on their ID.
+
+    Args:
+        candidate_id: The unique candidate ID (int or str).
+
+    Returns:
+        A UUID string that is consistent across process restarts.
+    """
+    return str(uuid.uuid5(NAMESPACE_UUID, str(candidate_id)))
 
 class QdrantManager:
     """Qdrant collection manager for hybrid search"""
@@ -169,7 +184,7 @@ class QdrantManager:
             for candidate in candidates:
                 search_text = self._create_search_text(candidate)
                 texts.append(search_text)
-            
+
             # Get embeddings - use lazy factory function
             hybrid_model = get_smart_hybrid_model()
             if not hybrid_model.is_fitted:
@@ -200,7 +215,7 @@ class QdrantManager:
                 
                 # Create point - convert integer ID to string to avoid UUID parsing error
                 point = PointStruct(
-                    id=id(str(candidate.candidate_id)),
+                    id=generate_uuid(candidate.candidate_id),
                     vector={
                         "dense": dense_embeddings[i].tolist(),
                         "sparse": sparse_vector
@@ -217,7 +232,7 @@ class QdrantManager:
                     }
                 )
                 points.append(point)
-            
+
             # Batch upsert
             batch_size = BATCH_SIZE
             for i in range(0, len(points), batch_size):
@@ -499,7 +514,7 @@ class QdrantManager:
                 payload = point.payload
                 first_name = payload.get("first_name", "") or ""
                 last_name = payload.get("last_name", "") or ""
-                full_name = f"{first_name}{last_name}".strip()
+                full_name = f"{last_name}{first_name}".strip()
                 
                 # Check if any target name matches this candidate
                 for target_name in target_names:
@@ -554,7 +569,7 @@ class QdrantManager:
                     must=[
                         FieldCondition(
                             key="candidate_id",
-                            match=MatchValue(value=candidate_id)
+                            match=MatchValue(value=str(candidate_id))
                         )
                     ]
                 ),

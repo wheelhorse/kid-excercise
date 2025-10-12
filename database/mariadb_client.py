@@ -207,11 +207,13 @@ class MariaDBClient:
                     c.key_skills,
                     c.notes,
                     c.date_modified
-                ORDER BY c.date_modified DESC;
+                ORDER BY c.date_modified DESC
                 """
                 
                 if limit:
-                    query += f" LIMIT {limit}"
+                    query += f" LIMIT {limit};"
+                else:
+                    query += f";"
                 
                 try:
                     cursor.execute(query)
