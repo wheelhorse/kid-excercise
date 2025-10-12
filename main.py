@@ -298,10 +298,11 @@ class TerminalInterface:
                     print(f"\n📋 Found {len(candidates)} candidates:")
                     
                     for candidate in candidates[:5]:
+                        candidate_id = candidate.get('candidate_id', 'N/A')
                         name = f"{candidate.get('first_name', '')} {candidate.get('last_name', '')}".strip()
                         score = candidate.get('rrf_score', 0.0)
                         skills = candidate.get('key_skills', '')[:40]
-                        print(f"  {candidate.get('rank', 'N/A')}. {name} (Score: {score:.4f}) - {skills}")
+                        print(f"  {candidate.get('rank', 'N/A')}. ID:{candidate_id} {name} (Score: {score:.4f}) - {skills}")
             else:
                 print("❌ Invalid choice!")
         except ValueError:
@@ -425,14 +426,17 @@ def main():
             print(f"❌ Search failed: {results['error']}")
         else:
             candidates = results.get("results", [])
+            candidate_ids = results.get("candidate_ids", [])
             print(f"\n📋 Found {len(candidates)} candidates:")
+            print(f"📋 Candidate IDs: {candidate_ids}")
             for candidate in candidates:
+                candidate_id = candidate.get('candidate_id', 'N/A')
                 name = f"{candidate.get('last_name', '')} {candidate.get('first_name', '')}".strip()
                 score = candidate.get('rrf_score', 0.0)
                 skills = candidate.get('key_skills', '')
                 sparse_score = candidate.get('sparse_score', '')
                 dense_score = candidate.get('dense_score', '')
-                print(f"  {candidate.get('rank', 'N/A')}. {name} (Score: {score:.4f}, sparse-{sparse_score}, dense-{dense_score}) - {skills}")
+                print(f"  {candidate.get('rank', 'N/A')}. ID:{candidate_id} {name} (Score: {score:.4f}, sparse-{sparse_score}, dense-{dense_score}) - {skills}")
         return
     
     # Run interactive mode

@@ -213,9 +213,13 @@ class SearchService:
                 
                 final_results.append(candidate_info)
             
+            # Extract candidate IDs for summary
+            candidate_ids = [result["candidate_id"] for result in final_results]
+            
             search_response = {
                 "results": final_results,
                 "total_found": len(final_results),
+                "candidate_ids": candidate_ids,  # Added candidate ID summary
                 "query_info": {
                     "job_description": job_description,
                     "additional_requirements": additional_requirements,
@@ -226,7 +230,7 @@ class SearchService:
                 "search_time": datetime.now().isoformat()
             }
             
-            logger.info(f"Search completed - found {len(final_results)} candidates")
+            logger.info(f"Search completed - found {len(final_results)} candidates with IDs: {candidate_ids}")
             return search_response
             
         except Exception as e:

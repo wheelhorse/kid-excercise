@@ -463,6 +463,125 @@ class QdrantManager:
             logger.error(f"Failed to get collection count: {str(e)}")
             return 0
     
+    @log_method("hybrid_search.qdrant")
+    def find_candidates_by_name(self, target_names: List[str]) -> List[Dict[str, Any]]:
+        """Find specific candidates by name in Qdrant database"""
+        if not self.is_connected:
+            logger.error("Not connected to Qdrant")
+            return []
+        
+        if not self.collection_exists():
+            logger.error(f"Collection {self.collection_name} doesn't exist")
+            return []
+        
+        try:
+            logger.info(f"Searching Qdrant for candidates with names: {target_names}")
+            
+            # Get all candidates from Qdrant (scroll through all points)
+            found_candidates = []
+            scroll_result = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=10000,  # Large limit to get all candidates
+                with_payload=True,
+                with_vectors=False
+            )
+            
+            points = scroll_result[0]  # Get points from scroll result
+            total_points = len(points)
+            logger.info(f"Retrieved {total_points} candidates from Qdrant")
+            
+            # Search for target names in the points
+            for point in points:
+                payload = point.payload
+                first_name = payload.get("first_name", "") or ""
+                last_name = payload.get("last_name", "") or ""
+                full_name = f"{first_name}{last_name}".strip()
+                
+                # Check if any target name matches this candidate
+                for target_name in target_names:
+                    if target_name in full_name or full_name in target_name:
+                        found_candidates.append({
+                            "point_id": str(point.id),
+                            "candidate_id": payload.get("candidate_id"),
+                            "full_name": full_name,
+                            "first_name": first_name,
+                            "last_name": last_name,
+                            "email": payload.get("email1"),
+                            "key_skills": payload.get("key_skills"),
+                            "search_text_snippet": payload.get("search_text", "")[:200],
+                            "target_matched": target_name
+                        })
+                        logger.info(f"Found candidate in Qdrant: {full_name} (ID: {payload.get('candidate_id')}) matches '{target_name}'")
+                        break
+            
+            if not found_candidates:
+                logger.warning(f"No candidates found in Qdrant matching names: {target_names}")
+                # Show sample of candidates for reference
+                logger.info("Sample candidates in Qdrant:")
+                for i, point in enumerate(points[:5]):
+                    payload = point.payload
+                    first_name = payload.get("first_name", "") or ""
+                    last_name = payload.get("last_name", "") or ""
+                    full_name = f"{first_name}{last_name}".strip()
+                    logger.info(f"  [{i+1}] ID:{payload.get('candidate_id')} Name:'{full_name}'")
+            
+            return found_candidates
+            
+        except Exception as e:
+            logger.error(f"Failed to find candidates by name: {str(e)}")
+            return []
+    
+    @log_method("hybrid_search.qdrant")
+    def get_candidate_by_id(self, candidate_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific candidate from Qdrant by candidate_id"""
+        if not self.is_connected:
+            logger.error("Not connected to Qdrant")
+            return None
+        
+        if not self.collection_exists():
+            logger.error(f"Collection {self.collection_name} doesn't exist")
+            return None
+        
+        try:
+            # Search for candidate with specific candidate_id
+            scroll_result = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="candidate_id",
+                            match=MatchValue(value=candidate_id)
+                        )
+                    ]
+                ),
+                limit=1,
+                with_payload=True,
+                with_vectors=False
+            )
+            
+            points = scroll_result[0]
+            if points:
+                point = points[0]
+                payload = point.payload
+                logger.info(f"Found candidate {candidate_id} in Qdrant: {payload.get('first_name')}{payload.get('last_name')}")
+                return {
+                    "point_id": str(point.id),
+                    "candidate_id": payload.get("candidate_id"),
+                    "full_name": f"{payload.get('first_name', '')}{payload.get('last_name', '')}".strip(),
+                    "first_name": payload.get("first_name"),
+                    "last_name": payload.get("last_name"),
+                    "email": payload.get("email1"),
+                    "key_skills": payload.get("key_skills"),
+                    "search_text": payload.get("search_text")
+                }
+            else:
+                logger.warning(f"Candidate {candidate_id} not found in Qdrant")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to get candidate by ID: {str(e)}")
+            return None
+    
     def disconnect(self):
         """Disconnect from Qdrant"""
         if self.client:
