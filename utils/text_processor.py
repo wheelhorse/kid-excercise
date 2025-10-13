@@ -111,7 +111,7 @@ class TextProcessor:
         # Filter out stop words and short tokens
         for token in search_tokens:
             token = token.strip()
-            if (len(token) >= 1 and 
+            if (len(token) >= 2 and 
                 token not in self.chinese_stop_words and
                 not token.isspace()):
                 all_tokens.append(token)

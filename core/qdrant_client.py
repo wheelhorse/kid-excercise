@@ -36,6 +36,36 @@ def generate_uuid(candidate_id: int | str) -> str:
     """
     return str(uuid.uuid5(NAMESPACE_UUID, str(candidate_id)))
 
+import re
+
+def chinese_name_match(target_name, full_name, first_name=None):
+    """Strict Chinese name match — avoids false positives like 徐佳芸 vs 谢X平"""
+    # Normalize
+    def norm(s):
+        return re.sub(r"\s+", "", s or "")
+
+    target_name = norm(target_name)
+    full_name = norm(full_name)
+    first_name = norm(first_name)
+
+    # 1. Exact match
+    if target_name == full_name:
+        return True
+
+#    # 2. Substring but must share at least 2 continuous Chinese chars
+#    # (Avoids single-character surname confusion)
+#    if len(target_name) >= 2 and len(full_name) >= 2:
+#        overlap = set(target_name) & set(full_name)
+#        if len(overlap) >= 2:
+#            return True
+#
+#    # 3. Optional fallback for first name (but not surname alone)
+#    if first_name and len(first_name) >= 2 and first_name in full_name:
+#        return True
+#
+    return False
+
+
 class QdrantManager:
     """Qdrant collection manager for hybrid search"""
     
@@ -122,7 +152,7 @@ class QdrantManager:
                     )
                 },
                 sparse_vectors_config={
-                    "sparse": SparseVectorParams()
+                    "sparse": SparseVectorParams(modifier="idf")
                 }
             )
             
@@ -518,7 +548,7 @@ class QdrantManager:
                 
                 # Check if any target name matches this candidate
                 for target_name in target_names:
-                    if target_name in full_name or full_name in target_name:
+                    if chinese_name_match(target_name, full_name, first_name):
                         found_candidates.append({
                             "point_id": str(point.id),
                             "candidate_id": payload.get("candidate_id"),
