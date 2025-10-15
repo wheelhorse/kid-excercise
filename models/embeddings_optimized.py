@@ -369,7 +369,7 @@ class OptimizedBM25Embedding:
         return sparse_vectors
     
     def _encode_single(self, text: str) -> Dict[str, Any]:
-        """Encode single text to sparse vector"""
+        """Encode single text to sparse vector with robust empty vector handling"""
         tokens = text_processor.create_bm25_tokens(text)
         token_counts = Counter(tokens)
         doc_length = len(tokens)
@@ -377,18 +377,46 @@ class OptimizedBM25Embedding:
         indices = []
         values = []
         
+        # CRITICAL FIX: Handle empty token case
+        if not tokens or doc_length == 0:
+            logger.warning(f"Empty tokens for text: '{text[:50]}...' - returning minimal sparse vector")
+            # Return minimal sparse vector instead of completely empty
+            return {
+                "indices": [0] if self.vocab_size > 0 else [],
+                "values": [0.001] if self.vocab_size > 0 else []  # Very small non-zero value
+            }
+        
         for token, count in token_counts.items():
             if token in self.vocabulary:
                 idx = self.vocabulary[token]
                 idf = self.idf_values[token]
                 
                 tf = count
-                norm_factor = self.k1 * (1 - self.b + self.b * (doc_length / self.avg_doc_length))
+                # CRITICAL FIX: Prevent division by zero
+                if self.avg_doc_length <= 0:
+                    norm_factor = self.k1
+                else:
+                    norm_factor = self.k1 * (1 - self.b + self.b * (doc_length / self.avg_doc_length))
+                
                 score = idf * (tf * (self.k1 + 1)) / (tf + norm_factor)
                 
                 if score > 0:
                     indices.append(idx)
                     values.append(score)
+        
+        # CRITICAL FIX: Ensure we never return completely empty sparse vectors
+        if not indices:
+            logger.warning(f"No vocabulary matches for text: '{text[:50]}...' - adding fallback token")
+            # Find most frequent token in vocabulary as fallback
+            if self.vocabulary and self.idf_values:
+                fallback_token = min(self.idf_values.keys(), key=lambda k: self.idf_values[k])
+                if fallback_token in self.vocabulary:
+                    indices = [self.vocabulary[fallback_token]]
+                    values = [0.001]  # Very small score to indicate low relevance
+            else:
+                # Last resort - return minimal vector
+                indices = [0] if self.vocab_size > 0 else []
+                values = [0.001] if self.vocab_size > 0 else []
         
         return {
             "indices": indices,

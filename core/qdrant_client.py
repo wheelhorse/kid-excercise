@@ -103,7 +103,7 @@ class QdrantManager:
     
     @log_method("hybrid_search.qdrant")
     def create_collection(self, recreate: bool = False) -> bool:
-        """Create collection with hybrid vector configuration"""
+        """Create collection with proper sparse vector configuration"""
         if not self.is_connected:
             logger.error("Not connected to Qdrant")
             return False
@@ -142,25 +142,41 @@ class QdrantManager:
             
             logger.info(f"Creating collection with dense_dim={dense_dim}")
             
-            # Create collection with hybrid vectors
+            # CRITICAL FIX: Proper sparse vector configuration for large datasets
+            from qdrant_client.models import OptimizersConfig, HnswConfig
+            
+            # Create collection with optimized hybrid vectors configuration
             self.client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config={
                     "dense": VectorParams(
                         size=dense_dim,
-                        distance=Distance.COSINE
+                        distance=Distance.COSINE,
+                        on_disk=True,  # Use disk for large datasets
+                        hnsw_config=HnswConfig(
+                            m=16,
+                            ef_construct=200,
+                            full_scan_threshold=10000  # Optimize for large datasets
+                        )
                     )
                 },
                 sparse_vectors_config={
                     "sparse": SparseVectorParams(
                         index=SparseIndexParams(
-                            on_disk=False,  # Keep sparse index in memory for better performance
+                            on_disk=False,  # Keep sparse index in memory for speed
+                            full_scan_threshold=20000,  # Optimize for large datasets
                         )
                     )
-                }
+                },
+                optimizers_config=OptimizersConfig(
+                    default_segment_number=4,
+                    max_segment_size=200000,
+                    indexing_threshold=20000,
+                    flush_interval_sec=5
+                )
             )
             
-            logger.info(f"Created collection: {self.collection_name}")
+            logger.info(f"Created collection with hybrid search support: {self.collection_name}")
             return True
             
         except Exception as e:
@@ -311,7 +327,7 @@ class QdrantManager:
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3
     ) -> List[Dict[str, Any]]:
-        """Perform hybrid search combining dense and sparse vectors"""
+        """Perform hybrid search with progressive fallback strategies"""
         if not self.is_connected:
             logger.error("Not connected to Qdrant")
             return []
@@ -319,33 +335,184 @@ class QdrantManager:
         logger.info(f"Performing hybrid search for query: '{query[:50]}...'")
         
         try:
-            # Encode query - use lazy factory function
+            # CRITICAL FIX: Progressive fallback search strategy
+            return self._progressive_hybrid_search(query, limit, dense_weight, sparse_weight)
+            
+        except Exception as e:
+            logger.error(f"All hybrid search strategies failed: {str(e)}")
+            return []
+    
+    def _progressive_hybrid_search(
+        self, 
+        query: str, 
+        limit: int, 
+        dense_weight: float, 
+        sparse_weight: float
+    ) -> List[Dict[str, Any]]:
+        """Progressive fallback search with multiple strategies"""
+        
+        # Strategy 1: Full hybrid search (ideal case)
+        try:
+            logger.debug("Attempting Strategy 1: Full hybrid search")
+            
+            # Encode query - use factory function
             hybrid_model = get_smart_hybrid_model()
             query_embeddings = hybrid_model.encode_query(query)
             dense_query = query_embeddings["dense"]
             sparse_query_data = query_embeddings["sparse"]
             
+            # Validate sparse query data
+            if not sparse_query_data.get("indices") or not sparse_query_data.get("values"):
+                logger.warning("Empty sparse query detected, proceeding to fallback strategies")
+                raise ValueError("Empty sparse query")
+                
             sparse_query = SparseVector(
                 indices=sparse_query_data["indices"],
                 values=sparse_query_data["values"]
             )
             
-            print(sparse_query)
+            logger.debug(f"Sparse query: indices={len(sparse_query.indices)}, values={len(sparse_query.values)}")
+            
             # Perform searches
             dense_results = self._dense_search(dense_query, limit)
             sparse_results = self._sparse_search(sparse_query, limit)
             
-            # Combine results using RRF (Reciprocal Rank Fusion)
+            # CRITICAL FIX: Validate search results before fusion
+            if not dense_results and not sparse_results:
+                logger.warning("Both dense and sparse searches returned empty results")
+                raise ValueError("Empty search results")
+            
+            # Combine results using RRF
             combined_results = self._rrf_fusion(
                 dense_results, sparse_results, 
                 dense_weight, sparse_weight, limit
             )
             
-            logger.info(f"Hybrid search returned {len(combined_results)} results")
-            return combined_results
+            if combined_results:
+                logger.info(f"Strategy 1 successful: {len(combined_results)} hybrid results")
+                return combined_results
+            else:
+                raise ValueError("RRF fusion returned empty results")
+                
+        except Exception as e:
+            logger.warning(f"Strategy 1 (full hybrid) failed: {str(e)}")
+        
+        # Strategy 2: Dense-only search (semantic fallback)
+        try:
+            logger.debug("Attempting Strategy 2: Dense-only search")
+            
+            hybrid_model = get_smart_hybrid_model()
+            query_embeddings = hybrid_model.encode_query(query)
+            dense_query = query_embeddings["dense"]
+            
+            dense_results = self._dense_search(dense_query, limit)
+            
+            if dense_results:
+                # Convert to unified format
+                unified_results = []
+                for result in dense_results:
+                    unified_results.append({
+                        "candidate_id": result["candidate_id"],
+                        "rrf_score": result["dense_score"],  # Use dense score as final score
+                        "dense_score": result["dense_score"],
+                        "dense_rank": result["dense_rank"],
+                        "final_rank": result["dense_rank"],
+                        "payload": result["payload"],
+                        "search_strategy": "dense_only"
+                    })
+                
+                logger.info(f"Strategy 2 successful: {len(unified_results)} dense-only results")
+                return unified_results
+            else:
+                raise ValueError("Dense search returned empty results")
+                
+        except Exception as e:
+            logger.warning(f"Strategy 2 (dense-only) failed: {str(e)}")
+        
+        # Strategy 3: Text-based fallback search (last resort)
+        try:
+            logger.debug("Attempting Strategy 3: Text-based fallback search")
+            
+            # Simple text matching as absolute fallback
+            fallback_results = self._text_fallback_search(query, limit)
+            
+            if fallback_results:
+                logger.info(f"Strategy 3 successful: {len(fallback_results)} text-based fallback results")
+                return fallback_results
+            else:
+                raise ValueError("Text fallback search returned empty results")
+                
+        except Exception as e:
+            logger.warning(f"Strategy 3 (text fallback) failed: {str(e)}")
+        
+        # All strategies failed
+        logger.error("All search strategies failed - returning empty results")
+        return []
+    
+    def _text_fallback_search(self, query: str, limit: int) -> List[Dict[str, Any]]:
+        """Fallback text-based search when vector searches fail"""
+        try:
+            logger.debug(f"Performing text fallback search for: '{query[:50]}...'")
+            
+            # Extract key terms from query
+            query_terms = query.lower().split()
+            if not query_terms:
+                return []
+            
+            # Scroll through collection to find text matches
+            scroll_result = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=min(limit * 10, 10000),  # Get more candidates for filtering
+                with_payload=True,
+                with_vectors=False
+            )
+            
+            points = scroll_result[0]
+            if not points:
+                return []
+            
+            # Score candidates based on text matching
+            scored_candidates = []
+            for point in points:
+                payload = point.payload
+                
+                # Combine searchable text fields
+                searchable_text = " ".join([
+                    payload.get("first_name", ""),
+                    payload.get("last_name", ""),
+                    payload.get("key_skills", ""),
+                    payload.get("search_text", ""),
+                ]).lower()
+                
+                # Simple term matching score
+                matches = sum(1 for term in query_terms if term in searchable_text)
+                if matches > 0:
+                    score = matches / len(query_terms)  # Normalize by query length
+                    
+                    scored_candidates.append({
+                        "candidate_id": payload.get("candidate_id"),
+                        "rrf_score": score,
+                        "text_match_score": score,
+                        "matched_terms": matches,
+                        "total_terms": len(query_terms),
+                        "final_rank": 0,  # Will be set after sorting
+                        "payload": payload,
+                        "search_strategy": "text_fallback"
+                    })
+            
+            # Sort by score and limit results
+            scored_candidates.sort(key=lambda x: x["rrf_score"], reverse=True)
+            results = scored_candidates[:limit]
+            
+            # Set final ranks
+            for i, result in enumerate(results):
+                result["final_rank"] = i + 1
+            
+            logger.debug(f"Text fallback found {len(results)} matches")
+            return results
             
         except Exception as e:
-            logger.error(f"Hybrid search failed: {str(e)}")
+            logger.error(f"Text fallback search failed: {str(e)}")
             return []
     
     def _dense_search(self, query_vector: np.ndarray, limit: int) -> List[Dict[str, Any]]:
