@@ -10,7 +10,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     VectorParams, Distance, PointStruct, SparseVector, SparseVectorParams,
     CollectionInfo, SearchRequest, QueryRequest, Filter,
-    FieldCondition, MatchValue, SearchParams, NamedSparseVector
+    FieldCondition, MatchValue, SearchParams, NamedSparseVector, SparseIndexParams
 )
 from qdrant_client.http.exceptions import UnexpectedResponse
 
@@ -152,7 +152,11 @@ class QdrantManager:
                     )
                 },
                 sparse_vectors_config={
-                    "sparse": SparseVectorParams(modifier="idf")
+                    "sparse": SparseVectorParams(
+                        index=SparseIndexParams(
+                            on_disk=False,  # Keep sparse index in memory for better performance
+                        )
+                    )
                 }
             )
             
