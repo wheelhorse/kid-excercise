@@ -4,6 +4,8 @@
 
 This hybrid search system transforms resume retrieval from manual keyword-limited searches into intelligent, bilingual candidate matching. It combines dense embeddings (BGE-M3), sparse embeddings (BM25), and smart fusion (RRF) to deliver superior relevance, sub-second performance, and seamless Chinese/English handling. The system provides dual interfaces (terminal and library) with a clear roadmap for DashApp web integration, daily automated synchronization, and Cython performance optimization.
 
+** A high level guidance that we must keep the implementation simple and elegant!! **
+
 ## Problem Statement
 
 ### The Challenge

@@ -57,6 +57,7 @@ EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")  # or "cuda"
 ENABLE_CACHING = True
 CACHE_SIZE = 1000  # Default cache size, smart embeddings will optimize internally
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "32"))  # Default batch size for processing
+OFFLINE_MODE = os.getenv("OFFLINE_MODE", "true").lower() in ("true", "1", "yes")  # Prefer local cache
 
 # Search Configuration
 SIMILARITY_THRESHOLD = 0.3

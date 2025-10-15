@@ -15,7 +15,7 @@ from utils.logger import Logger, log_performance
 from utils.text_processor import text_processor
 from utils.model_cache_manager import cache_manager
 from utils.model_downloader import model_downloader
-from config import BGE_M3_MODEL, EMBEDDING_DEVICE, MAX_TEXT_LENGTH
+from config import BGE_M3_MODEL, EMBEDDING_DEVICE, MAX_TEXT_LENGTH, OFFLINE_MODE
 from .text_preprocessing import preprocess_texts_consistent, preprocess_single_text
 from .embeddings_optimized import OptimizedBM25Embedding
 
@@ -47,16 +47,56 @@ class BGEEmbedding:
     def _load_model(self):
         """Load the BGE-M3 model from cache"""
         try:
-            logger.info(f"Loading BGE-M3 model: {self.model_name}")
+            logger.info(f"Loading BGE-M3 model: {self.model_name} (offline_mode={OFFLINE_MODE})")
             
-            # Configure cache environment for SentenceTransformers
-            os.environ['SENTENCE_TRANSFORMERS_HOME'] = str(cache_manager.dense_cache_dir)
+            # First, try to find the model in local cache
+            local_model_path = self._get_local_model_path()
             
-            self.model = SentenceTransformer(self.model_name, device=self.device)
-            logger.info(f"BGE-M3 model loaded successfully from cache on {self.device}")
+            if local_model_path and local_model_path.exists():
+                logger.info(f"Using local cached model at: {local_model_path}")
+                self.model = SentenceTransformer(str(local_model_path), device=self.device)
+            elif OFFLINE_MODE:
+                # In offline mode, refuse to download from HuggingFace
+                raise RuntimeError(f"Model {self.model_name} not found in local cache and OFFLINE_MODE=true. "
+                                 f"Please ensure the model is cached locally or set OFFLINE_MODE=false")
+            else:
+                # Fallback to HuggingFace with cache environment
+                logger.info("Local model not found, using HuggingFace cache")
+                os.environ['SENTENCE_TRANSFORMERS_HOME'] = str(cache_manager.dense_cache_dir)
+                self.model = SentenceTransformer(self.model_name, device=self.device)
+                
+            logger.info(f"BGE-M3 model loaded successfully on {self.device}")
         except Exception as e:
             logger.error(f"Failed to load BGE-M3 model: {str(e)}")
             raise
+    
+    def _get_local_model_path(self) -> Optional[Path]:
+        """Get the local model path if it exists"""
+        try:
+            # Check HuggingFace cache format first
+            hf_cache_name = f"models--{self.model_name.replace('/', '--')}"
+            hf_cache_path = cache_manager.dense_cache_dir / hf_cache_name
+            
+            if hf_cache_path.exists():
+                # Look for the latest snapshot directory with config.json
+                snapshots_dir = hf_cache_path / "snapshots"
+                if snapshots_dir.exists():
+                    for snapshot_dir in snapshots_dir.iterdir():
+                        if snapshot_dir.is_dir() and (snapshot_dir / "config.json").exists():
+                            logger.debug(f"Found HuggingFace cache at: {snapshot_dir}")
+                            return snapshot_dir
+            
+            # Check old format cache
+            old_cache_path = cache_manager.get_dense_model_cache_path(self.model_name)
+            if old_cache_path.exists() and (old_cache_path / "config.json").exists():
+                logger.debug(f"Found old format cache at: {old_cache_path}")
+                return old_cache_path
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error checking local model path: {e}")
+            return None
     
     @log_performance
     def encode(self, texts: Union[str, List[str]], batch_size: int = 32) -> np.ndarray:
