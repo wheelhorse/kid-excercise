@@ -143,7 +143,7 @@ class QdrantManager:
             logger.info(f"Creating collection with dense_dim={dense_dim}")
             
             # CRITICAL FIX: Proper sparse vector configuration for large datasets
-            from qdrant_client.models import OptimizersConfig, HnswConfig
+            # Simplified configuration to avoid version compatibility issues
             
             # Create collection with optimized hybrid vectors configuration
             self.client.create_collection(
@@ -152,12 +152,7 @@ class QdrantManager:
                     "dense": VectorParams(
                         size=dense_dim,
                         distance=Distance.COSINE,
-                        on_disk=True,  # Use disk for large datasets
-                        hnsw_config=HnswConfig(
-                            m=16,
-                            ef_construct=200,
-                            full_scan_threshold=10000  # Optimize for large datasets
-                        )
+                        on_disk=False  # Use disk for large datasets
                     )
                 },
                 sparse_vectors_config={
@@ -167,13 +162,7 @@ class QdrantManager:
                             full_scan_threshold=20000,  # Optimize for large datasets
                         )
                     )
-                },
-                optimizers_config=OptimizersConfig(
-                    default_segment_number=4,
-                    max_segment_size=200000,
-                    indexing_threshold=20000,
-                    flush_interval_sec=5
-                )
+                }
             )
             
             logger.info(f"Created collection with hybrid search support: {self.collection_name}")
